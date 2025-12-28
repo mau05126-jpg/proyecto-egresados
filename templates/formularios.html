@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="mb-4">Formulario de Registro de Egresados</h1>
+
+<form id="formEgresado">
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label for="matricula" class="form-label">Matrícula (8 dígitos)</label>
+            <input type="text" class="form-control" id="matricula" name="matricula" maxlength="8" required>
+        </div>
+        <div class="col-md-6 mb-3">
+            <label for="nombre_completo" class="form-label">Nombre Completo</label>
+            <input type="text" class="form-control" id="nombre_completo" name="nombre_completo" required>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label for="carrera" class="form-label">Carrera</label>
+            <select class="form-select" id="carrera" name="carrera" required>
+                <option value="">Seleccionar...</option>
+                <option value="Ingeniería en Innovación Agrícola Sustentable">Ingeniería en Innovación Agrícola Sustentable</option>
+                <option value="Ingeniería en Sistemas Computacionales">Ingeniería en Sistemas Computacionales</option>
+                <option value="Licenciatura en Contaduría">Licenciatura en Contaduría</option>
+            </select>
+        </div>
+        <div class="col-md-6 mb-3">
+            <label for="generacion" class="form-label">Generación</label>
+            <select class="form-select" id="generacion" name="generacion" required>
+                <option value="">Seleccionar...</option>
+                {% for i in range(2007, 2021) %}
+                <option value="{{ i }}-{{ i+5 }}">{{ i }}-{{ i+5 }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-4 mb-3">
+            <label for="estatus" class="form-label">Estatus</label>
+            <select class="form-select" id="estatus" name="estatus" required>
+                <option value="">Seleccionar...</option>
+                <option value="Egresado">Egresado</option>
+                <option value="En seguimiento">En seguimiento</option>
+                <option value="Titulado">Titulado</option>
+            </select>
+        </div>
+        <div class="col-md-4 mb-3">
+            <label for="genero" class="form-label">Género</label>
+            <select class="form-select" id="genero" name="genero">
+                <option value="">Seleccionar...</option>
+                <option value="Masculino">Masculino</option>
+                <option value="Femenino">Femenino</option>
+                <option value="Otro">Otro</option>
+            </select>
+        </div>
+        <div class="col-md-4 mb-3">
+            <label for="telefono" class="form-label">Teléfono</label>
+            <input type="tel" class="form-control" id="telefono" name="telefono">
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6 mb-3">
+            <label for="email" class="form-label">Correo Electrónico</label>
+            <input type="email" class="form-control" id="email" name="email">
+        </div>
+        <div class="col-md-6 mb-3">
+            <label for="domicilio" class="form-label">Domicilio</label>
+            <input type="text" class="form-control" id="domicilio" name="domicilio">
+        </div>
+    </div>
+
+    <div class="mt-3">
+        <button type="submit" class="btn btn-primary">Guardar Egresado</button>
+        <a href="/dashboard" class="btn btn-secondary">Volver al Dashboard</a>
+    </div>
+</form>
+
+<script>
+    document.getElementById('formEgresado').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(e.target);
+        const data = Object.fromEntries(formData.entries());
+        
+        fetch('/api/egresados', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(data => {
+            alert('Egresado registrado exitosamente');
+            window.location.href = '/dashboard';
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error al registrar egresado');
+        });
+    });
+</script>
+{% endblock %}
