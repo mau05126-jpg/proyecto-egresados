@@ -14,7 +14,6 @@
         }
         .footer { background-color: #f1f1f1; padding: 20px 0; margin-top: 40px; }
         
-        /* Estilos para "Control de Egresados" como texto estático - BLANCO INTENSO */
         .navbar-static-text {
             color: #FFFFFF !important;
             font-size: 1.3rem;
@@ -28,7 +27,6 @@
             letter-spacing: 0.5px;
         }
         
-        /* ELIMINAR LA OPACIDAD QUE BOOTSTRAP PONE POR DEFECTO */
         .navbar-dark .navbar-nav .nav-link {
             --bs-navbar-color: rgba(255, 255, 255, 1) !important;
             --bs-navbar-hover-color: rgba(255, 255, 255, 1) !important;
@@ -36,10 +34,9 @@
             opacity: 1 !important;
         }
         
-        /* SOLUCIÓN DEFINITIVA: Selector MUY específico para los 3 enlaces */
         .navbar.navbar-dark .navbar-nav.ms-auto .nav-link {
             color: #FFFFFF !important;
-            font-weight: 700 !important; /* Igual de grueso que "Control de Egresados" */
+            font-weight: 700 !important; 
             font-size: 1.1rem !important;
             text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
             letter-spacing: 0.5px !important;
@@ -50,7 +47,6 @@
             border-radius: 4px;
         }
         
-        /* Hover con mismo blanco intenso */
         .navbar.navbar-dark .navbar-nav.ms-auto .nav-link:hover {
             color: #FFFFFF !important;
             background-color: rgba(255, 255, 255, 0.2) !important;
@@ -60,7 +56,6 @@
             opacity: 1 !important;
         }
         
-        /* Regla EXTREMA para forzar el color */
         .navbar-nav a[href="/dashboard"],
         .navbar-nav a[href="/formularios"],
         .navbar-nav a[href="/logout"] {
@@ -77,7 +72,6 @@
             filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
         }
         
-        /* Forzar que NO haya transparencia en ningún texto del navbar */
         .navbar * {
             opacity: 1 !important;
         }
@@ -86,7 +80,6 @@
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark fixed-top">
         <div class="container">
-            <!-- "Control de Egresados" como texto estático -->
             <div class="navbar-static-text">
                 <img src="{{ url_for('static', filename='images/umb.png') }}" 
                      alt="Logo UMB" 
@@ -100,7 +93,6 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <div class="navbar-nav ms-auto">
-                    <!-- Estilos inline como garantía FINAL -->
                     <a class="nav-link" href="/dashboard" 
                        style="color: #FFFFFF !important; font-weight: 700 !important; text-shadow: 0 1px 3px rgba(0,0,0,0.3) !important; opacity: 1 !important;">
                         Dashboard
