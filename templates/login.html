@@ -1,33 +1,111 @@
 {% extends "base.html" %}
 
+{% block title %}Login - Control de Egresados{% endblock %}
+
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                <h3 class="text-center">Inicio de Sesión</h3>
+<div class="row justify-content-center min-vh-80 align-items-center">
+    <div class="col-md-5 col-lg-4">
+        <div class="card border-0 shadow-lg p-4">
+            <!-- Logo y título sin card-header -->
+            <div class="text-center pt-3 pb-4">
+                <img src="{{ url_for('static', filename='images/umb.png') }}" 
+                     alt="Logo UMB" 
+                     class="mb-3" 
+                     style="height: 50px;">
+                <h4 class="fw-bold text-dark mb-1">Iniciar Sesión</h4>
+                <p class="text-muted small">Sistema de Control de Egresados</p>
             </div>
-            <div class="card-body">
-                <form method="POST" action="/login">
-                    <div class="mb-3">
-                        <label for="username" class="form-label">Usuario</label>
-                        <input type="text" class="form-control" id="username" name="username" required>
+            
+            <!-- Formulario -->
+            <form method="POST" action="{{ url_for('login') }}">
+                <!-- Campo Usuario -->
+                <div class="mb-3">
+                    <label for="username" class="form-label fw-semibold">
+                        <i class="bi bi-person-circle me-1"></i> Usuario
+                    </label>
+                    <div class="position-relative">
+                        <i class="bi bi-person position-absolute" 
+                           style="left: 15px; top: 50%; transform: translateY(-50%); 
+                                  color: #6c757d; z-index: 10;"></i>
+                        <input type="text" 
+                               class="form-control border-2" 
+                               id="username" 
+                               name="username" 
+                               placeholder="Ingresa tu usuario"
+                               required
+                               autofocus
+                               style="padding-left: 45px;">
                     </div>
-                    <div class="mb-3">
-                        <label for="password" class="form-label">Contraseña</label>
-                        <input type="password" class="form-control" id="password" name="password" required>
+                </div>
+                
+                <!-- Campo Contraseña -->
+                <div class="mb-4">
+                    <label for="password" class="form-label fw-semibold">
+                        <i class="bi bi-shield-lock me-1"></i> Contraseña
+                    </label>
+                    <div class="position-relative">
+                        <i class="bi bi-key position-absolute" 
+                           style="left: 15px; top: 50%; transform: translateY(-50%); 
+                                  color: #6c757d; z-index: 10;"></i>
+                        <input type="password" 
+                               class="form-control border-2" 
+                               id="password" 
+                               name="password" 
+                               placeholder="Ingresa tu contraseña"
+                               required
+                               style="padding-left: 45px;">
                     </div>
-                    <button type="submit" class="btn btn-primary w-100">Ingresar</button>
-                </form>
-                {% with messages = get_flashed_messages(with_categories=true) %}
-                    {% if messages %}
-                        {% for category, message in messages %}
-                            <div class="alert alert-{{ category }} mt-3">{{ message }}</div>
-                        {% endfor %}
-                    {% endif %}
-                {% endwith %}
+                </div>
+                
+                <!-- Botón de Ingreso -->
+                <div class="d-grid gap-2 mb-4">
+                    <button type="submit" class="btn btn-primary btn-lg fw-semibold py-2">
+                        <i class="bi bi-box-arrow-in-right me-2"></i> Ingresar al Sistema
+                    </button>
+                </div>
+            </form>
+            
+            {% if config.get('ENV') == 'development' %}
+            <div class="alert alert-info mt-3 small" role="alert">
+                <i class="bi bi-info-circle me-1"></i>
+                <strong>Credenciales de prueba:</strong><br>
+                Usuario: <code>admin</code> - Contraseña: <code>admin123</code>
             </div>
+            {% endif %}
+            
+
         </div>
     </div>
 </div>
+
+<style>
+    .min-vh-80 {
+        min-height: 80vh;
+    }
+    .card {
+        border-radius: 12px;
+    }
+    
+    .form-control {
+        border: 1px solid #ced4da !important;
+        border-radius: 8px !important;
+        padding: 10px 15px 10px 45px !important;
+    }
+    
+    .form-control:focus {
+        border-color: #86b7fe !important;
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25) !important;
+        outline: 0 !important;
+    }
+    
+    .btn-primary {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+    }
+    
+    .btn-primary:hover {
+        background-color: #0b5ed7;
+        border-color: #0a58ca;
+    }
+</style>
 {% endblock %}

@@ -1,12 +1,30 @@
 {% extends "base.html" %}
 
+{% block title %}Inicio - Control de Egresados{% endblock %}
+
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-8 text-center">
-        <h1 class="mb-4">Bienvenido al Sistema de Control de Egresados</h1>
-        <p class="lead">UES San José del Rincón</p>
-        <div class="mt-5">
-            <a href="/login" class="btn btn-primary btn-lg">Iniciar Sesión</a>
+<div class="text-center py-5">
+    <h1 class="display-4">Sistema de Control de Egresados</h1>
+    <p class="lead">Universidad Mexiquense del Bicentenario
+        <br>
+        San José del Rincón</p>
+    
+    <div class="row mt-5">
+        <div class="col-md-6 offset-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Acceso al Sistema</h5>
+                    <p class="card-text">Para acceder al panel de administración, inicia sesión con tus credenciales.</p>
+                    
+                    {% if not current_user.is_authenticated %}
+                    <a href="/login" class="btn btn-primary btn-lg">Iniciar Sesión</a>
+                    {% else %}
+                    <a href="/dashboard" class="btn btn-success btn-lg">Ir al Dashboard</a>
+                    {% endif %}
+                    
+
+                </div>
+            </div>
         </div>
     </div>
 </div>

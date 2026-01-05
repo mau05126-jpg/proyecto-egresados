@@ -1,15 +1,15 @@
 {% extends "base.html" %}
 
-{% block title %}Formularios - Control de Egresados{% endblock %}
+{% block title %}Editar Egresado - Control de Egresados{% endblock %}
 
 {% block content %}
 <div class="container py-4">
     <!-- Encabezado compacto sin círculo -->
     <div class="form-header-compact text-center mb-4">
         <h2 class="form-title-compact mb-2">
-            <i class="fas fa-user-graduate me-2 text-primary"></i>Registro de Egresado
+            <i class="fas fa-user-edit me-2 text-primary"></i>Editar Egresado
         </h2>
-        <p class="text-muted small mb-0">Complete la información requerida para registrar un nuevo egresado</p>
+        <p class="text-muted small mb-0">Actualice la información del egresado: <strong>{{ egresado.nombre_completo }}</strong></p>
     </div>
 
     <!-- Formulario compacto -->
@@ -18,16 +18,13 @@
             <div class="card form-card-compact">
                 <div class="card-header bg-primary-compact py-3">
                     <div class="d-flex align-items-center">
-                        <i class="fas fa-file-alt me-2"></i>
-                        <h5 class="mb-0">Formulario de Registro</h5>
+                        <i class="fas fa-edit me-2"></i>
+                        <h5 class="mb-0">Formulario de Edición</h5>
                     </div>
                 </div>
                 
                 <div class="card-body p-4">
-                    <!-- CAMBIO IMPORTANTE: method="POST" y sin action (se enviará a la misma ruta) -->
-                    <form method="POST" id="egresadoForm" class="needs-validation" novalidate>
-                        {{ form.hidden_tag() if form }}
-                        
+                    <form method="POST" id="editarEgresadoForm" class="needs-validation" novalidate>
                         <!-- Sección 1: Información Básica -->
                         <div class="form-section-compact mb-4">
                             <h6 class="section-title-sm mb-3">
@@ -35,24 +32,24 @@
                             </h6>
                             
                             <div class="row g-3">
-                                <!-- Matrícula -->
+                                <!-- Matrícula (deshabilitada) -->
                                 <div class="col-md-6">
                                     <div class="form-group-compact">
-                                        <label for="matricula" class="form-label-sm">
-                                            Matrícula <span class="text-danger">*</span>
+                                        <label class="form-label-sm">
+                                            Matrícula <span class="text-muted">(No editable)</span>
                                         </label>
                                         <div class="input-group-sm">
                                             <span class="input-group-icon">
                                                 <i class="fas fa-hashtag"></i>
                                             </span>
                                             <input type="text" class="form-control-sm" 
-                                                   id="matricula" name="matricula" maxlength="8" required
-                                                   value="{{ request.args.get('matricula', '') }}"
-                                                   placeholder="8 dígitos">
+                                                   value="{{ egresado.matricula }}" 
+                                                   disabled style="background-color: #f8f9fa;">
                                         </div>
                                         <small class="form-text-sm">
-                                            <i class="fas fa-info-circle me-1"></i> Ejemplo: 20201234
+                                            <i class="fas fa-info-circle me-1"></i> La matrícula no se puede modificar
                                         </small>
+                                        <input type="hidden" name="matricula" value="{{ egresado.matricula }}">
                                     </div>
                                 </div>
                                 
@@ -67,8 +64,8 @@
                                                 <i class="fas fa-user"></i>
                                             </span>
                                             <input type="text" class="form-control-sm" 
-                                                   id="nombre_completo" name="nombre_completo" required
-                                                   value="{{ request.args.get('nombre_completo', '') }}"
+                                                   id="nombre_completo" name="nombre_completo" 
+                                                   value="{{ egresado.nombre_completo }}" required
                                                    placeholder="Nombre completo">
                                         </div>
                                     </div>
@@ -95,16 +92,16 @@
                                             </span>
                                             <select class="form-select-sm" id="carrera" name="carrera" required>
                                                 <option value="">Seleccionar...</option>
-                                                <option value="Ingeniería en Innovación Agrícola Sustentable"
-                                                        {% if request.args.get('carrera') == 'Ingeniería en Innovación Agrícola Sustentable' %}selected{% endif %}>
+                                                <option value="Ingeniería en Innovación Agrícola Sustentable" 
+                                                        {% if egresado.carrera == 'Ingeniería en Innovación Agrícola Sustentable' %}selected{% endif %}>
                                                     Ingeniería en Innovación Agrícola Sustentable
                                                 </option>
-                                                <option value="Ingeniería en Sistemas Computacionales"
-                                                        {% if request.args.get('carrera') == 'Ingeniería en Sistemas Computacionales' %}selected{% endif %}>
+                                                <option value="Ingeniería en Sistemas Computacionales" 
+                                                        {% if egresado.carrera == 'Ingeniería en Sistemas Computacionales' %}selected{% endif %}>
                                                     Ingeniería en Sistemas Computacionales
                                                 </option>
-                                                <option value="Licenciatura en Contaduría"
-                                                        {% if request.args.get('carrera') == 'Licenciatura en Contaduría' %}selected{% endif %}>
+                                                <option value="Licenciatura en Contaduría" 
+                                                        {% if egresado.carrera == 'Licenciatura en Contaduría' %}selected{% endif %}>
                                                     Licenciatura en Contaduría
                                                 </option>
                                             </select>
@@ -125,8 +122,8 @@
                                             <select class="form-select-sm" id="generacion" name="generacion" required>
                                                 <option value="">Seleccionar...</option>
                                                 {% for year in range(2007, 2027) %}
-                                                <option value="{{ year }}-{{ year+5 }}"
-                                                        {% if request.args.get('generacion') == year|string + '-' + (year+5)|string %}selected{% endif %}>
+                                                <option value="{{ year }}-{{ year+5 }}" 
+                                                        {% if egresado.generacion == year|string + '-' + (year+5)|string %}selected{% endif %}>
                                                     {{ year }}-{{ year+5 }}
                                                 </option>
                                                 {% endfor %}
@@ -156,9 +153,9 @@
                                             </span>
                                             <select class="form-select-sm" id="estatus" name="estatus" required>
                                                 <option value="">Seleccionar...</option>
-                                                <option value="Egresado" {% if request.args.get('estatus') == 'Egresado' %}selected{% endif %}>Egresado</option>
-                                                <option value="En seguimiento" {% if request.args.get('estatus') == 'En seguimiento' %}selected{% endif %}>En seguimiento</option>
-                                                <option value="Titulado" {% if request.args.get('estatus') == 'Titulado' %}selected{% endif %}>Titulado</option>
+                                                <option value="Egresado" {% if egresado.estatus == 'Egresado' %}selected{% endif %}>Egresado</option>
+                                                <option value="En seguimiento" {% if egresado.estatus == 'En seguimiento' %}selected{% endif %}>En seguimiento</option>
+                                                <option value="Titulado" {% if egresado.estatus == 'Titulado' %}selected{% endif %}>Titulado</option>
                                             </select>
                                         </div>
                                     </div>
@@ -176,9 +173,9 @@
                                             </span>
                                             <select class="form-select-sm" id="genero" name="genero">
                                                 <option value="">Seleccionar...</option>
-                                                <option value="Masculino" {% if request.args.get('genero') == 'Masculino' %}selected{% endif %}>Masculino</option>
-                                                <option value="Femenino" {% if request.args.get('genero') == 'Femenino' %}selected{% endif %}>Femenino</option>
-                                                <option value="Otro" {% if request.args.get('genero') == 'Otro' %}selected{% endif %}>Otro</option>
+                                                <option value="Masculino" {% if egresado.genero == 'Masculino' %}selected{% endif %}>Masculino</option>
+                                                <option value="Femenino" {% if egresado.genero == 'Femenino' %}selected{% endif %}>Femenino</option>
+                                                <option value="Otro" {% if egresado.genero == 'Otro' %}selected{% endif %}>Otro</option>
                                             </select>
                                         </div>
                                     </div>
@@ -197,7 +194,7 @@
                                                 <i class="fas fa-home"></i>
                                             </span>
                                             <input type="text" class="form-control-sm" id="domicilio" name="domicilio"
-                                                   value="{{ request.args.get('domicilio', '') }}"
+                                                   value="{{ egresado.domicilio if egresado.domicilio else '' }}"
                                                    placeholder="Dirección completa">
                                         </div>
                                     </div>
@@ -223,7 +220,7 @@
                                                 <i class="fas fa-phone"></i>
                                             </span>
                                             <input type="tel" class="form-control-sm" id="telefono" name="telefono"
-                                                   value="{{ request.args.get('telefono', '') }}"
+                                                   value="{{ egresado.telefono if egresado.telefono else '' }}"
                                                    placeholder="Número de teléfono">
                                         </div>
                                     </div>
@@ -240,7 +237,7 @@
                                                 <i class="fas fa-envelope"></i>
                                             </span>
                                             <input type="email" class="form-control-sm" id="email" name="email"
-                                                   value="{{ request.args.get('email', '') }}"
+                                                   value="{{ egresado.email if egresado.email else '' }}"
                                                    placeholder="correo@ejemplo.com">
                                         </div>
                                     </div>
@@ -252,7 +249,11 @@
                         <div class="form-footer-compact border-top pt-4 mt-3">
                             <div class="row align-items-center">
                                 <div class="col-md-6 mb-3 mb-md-0">
-                              
+                                    <div class="required-info">
+                                        <small class="text-muted">
+                                            <i class="fas fa-asterisk text-danger small me-1"></i> Campos obligatorios
+                                        </small>
+                                    </div>
                                 </div>
                                 
                                 <div class="col-md-6">
@@ -261,7 +262,7 @@
                                             <i class="fas fa-times me-2"></i> Cancelar
                                         </a>
                                         <button type="submit" class="btn btn-primary-lg">
-                                            <i class="fas fa-save me-2"></i> Guardar Egresado
+                                            <i class="fas fa-save me-2"></i> Actualizar Egresado
                                         </button>
                                     </div>
                                 </div>
@@ -390,6 +391,12 @@
     .form-control-sm::placeholder {
         color: #a0aec0;
         font-size: 0.85rem;
+    }
+    
+    .form-control-sm:disabled {
+        background-color: #f8f9fa;
+        color: #6c757d;
+        cursor: not-allowed;
     }
     
     .form-select-sm {
@@ -547,8 +554,8 @@
     .form-section-compact:nth-child(4) { animation-delay: 0.4s; }
     
     /* Efectos hover en campos */
-    .form-control-sm:hover:not(:focus):not(.is-invalid):not(.is-valid),
-    .form-select-sm:hover:not(:focus):not(.is-invalid):not(.is-valid) {
+    .form-control-sm:hover:not(:focus):not(.is-invalid):not(.is-valid):not(:disabled),
+    .form-select-sm:hover:not(:focus):not(.is-invalid):not(.is-valid):not(:disabled) {
         border-color: #cbd5e0;
     }
 </style>
@@ -556,28 +563,7 @@
 <!-- Script para validación compacta -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const form = document.getElementById('egresadoForm');
-    const matriculaInput = document.getElementById('matricula');
-    
-    // Validación de matrícula en tiempo real
-    if (matriculaInput) {
-        matriculaInput.addEventListener('input', function() {
-            // Solo números
-            this.value = this.value.replace(/\D/g, '');
-            
-            // Limitar a 8 dígitos
-            if (this.value.length > 8) {
-                this.value = this.value.slice(0, 8);
-            }
-            
-            // Validación visual
-            validateMatricula(this);
-        });
-        
-        matriculaInput.addEventListener('blur', function() {
-            validateMatricula(this);
-        });
-    }
+    const form = document.getElementById('editarEgresadoForm');
     
     // Validación al enviar
     form.addEventListener('submit', function(e) {
@@ -596,15 +582,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 clearFieldError(field);
             }
         });
-        
-        // Validación específica para matrícula
-        if (matriculaInput && matriculaInput.value.trim()) {
-            if (matriculaInput.value.length !== 8) {
-                showFieldError(matriculaInput, 'La matrícula debe tener 8 dígitos');
-                isValid = false;
-                matriculaInput.focus();
-            }
-        }
         
         if (!isValid) {
             e.preventDefault();
@@ -632,9 +609,10 @@ document.addEventListener('DOMContentLoaded', function() {
             const submitBtn = form.querySelector('.btn-primary-lg');
             const originalText = submitBtn.innerHTML;
             
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Guardando...';
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Actualizando...';
             submitBtn.disabled = true;
             
+            // Simular carga (en producción esto ocurriría realmente)
             setTimeout(() => {
                 submitBtn.innerHTML = originalText;
                 submitBtn.disabled = false;
@@ -643,25 +621,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Funciones de ayuda
-    function validateMatricula(field) {
-        const value = field.value.trim();
-        
-        if (value.length === 0) {
-            clearFieldError(field);
-            return;
-        }
-        
-        if (value.length === 8) {
-            field.classList.remove('is-invalid');
-            field.classList.add('is-valid');
-            clearFieldError(field);
-        } else {
-            field.classList.remove('is-valid');
-            field.classList.add('is-invalid');
-            showFieldError(field, `Faltan ${8 - value.length} dígitos`);
-        }
-    }
-    
     function showFieldError(field, message) {
         field.classList.add('is-invalid');
         field.classList.remove('is-valid');
@@ -693,7 +652,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const inputs = form.querySelectorAll('input, select');
     inputs.forEach(input => {
         input.addEventListener('focus', function() {
-            this.parentNode.style.transform = 'scale(1.02)';
+            if (!this.disabled) {
+                this.parentNode.style.transform = 'scale(1.02)';
+            }
         });
         
         input.addEventListener('blur', function() {
