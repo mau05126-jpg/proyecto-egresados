@@ -1,8 +1,57 @@
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtualenv
 venv/
-*.sqlite3
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Database files - cualquier archivo .db en cualquier lugar
+*.db
+
+# Environment
 .env
-*.log
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
 .DS_Store
-database/egresados.db
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Vercel
+.vercel/
+
+# Logs
+*.log
