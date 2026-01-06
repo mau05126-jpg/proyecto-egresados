@@ -17,16 +17,62 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# ========== CONFIGURACIÓN FLASK CON ARCHIVOS ESTÁTICOS ==========
 app = Flask(__name__, 
            static_folder='static',
            static_url_path='/static')
 
-# ========== CONFIGURACIÓN ROBUSTA PARA VERCEL ==========
+# ========== VERIFICACIÓN DE ARCHIVOS ESTÁTICOS ==========
+logger.info("=" * 60)
+logger.info("🔍 SISTEMA DE CONTROL DE EGRESADOS - UMB")
+logger.info("📊 VERIFICANDO ESTRUCTURA DE ARCHIVOS")
+logger.info("=" * 60)
+
+# Verificar carpeta static
+current_dir = os.path.dirname(os.path.abspath(__file__))
+static_dir = os.path.join(current_dir, 'static')
+
+if os.path.exists(static_dir):
+    logger.info(f"✅ Carpeta 'static/' encontrada en: {static_dir}")
+    
+    # Listar archivos en static
+    css_files = []
+    js_files = []
+    image_files = []
+    
+    for root, dirs, files in os.walk(static_dir):
+        for file in files:
+            file_path = os.path.join(root, file)
+            relative_path = os.path.relpath(file_path, static_dir)
+            
+            if file.endswith('.css'):
+                css_files.append(relative_path)
+            elif file.endswith('.js'):
+                js_files.append(relative_path)
+            elif file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.ico')):
+                image_files.append(relative_path)
+    
+    logger.info(f"📁 Archivos CSS encontrados: {len(css_files)}")
+    for css in css_files:
+        logger.info(f"   - {css}")
+    
+    logger.info(f"📁 Archivos JS encontrados: {len(js_files)}")
+    for js in js_files:
+        logger.info(f"   - {js}")
+    
+    logger.info(f"📁 Imágenes encontradas: {len(image_files)}")
+    for img in image_files[:5]:  # Mostrar solo las primeras 5
+        logger.info(f"   - {img}")
+    
+    if len(image_files) > 5:
+        logger.info(f"   ... y {len(image_files) - 5} más")
+        
+else:
+    logger.error("❌ Carpeta 'static/' NO encontrada")
 
 logger.info("=" * 60)
-logger.info("🚀 SISTEMA DE CONTROL DE EGRESADOS - UMB")
-logger.info("📊 CONFIGURACIÓN PARA VERCEL + NEON POSTGRESQL")
-logger.info("=" * 60)
+
+# ========== CONFIGURACIÓN BASE DE DATOS ==========
 
 # Detectar si estamos en Vercel
 IS_VERCEL = 'VERCEL' in os.environ or 'VERCEL_ENV' in os.environ
@@ -38,46 +84,52 @@ DATABASE_URL = os.environ.get('DATABASE_URL')
 if DATABASE_URL:
     logger.info("✅ DATABASE_URL encontrada en variables de entorno")
     
-    # Limpiar espacios en la URL
+    # Limpiar y formatear URL
     DATABASE_URL = DATABASE_URL.strip()
     
-    # Asegurar formato correcto para PostgreSQL
     if DATABASE_URL.startswith('postgres://'):
         DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
         logger.info("✅ URL convertida de postgres:// a postgresql://")
     
-    # Verificar y eliminar espacios en el host
+    # Eliminar espacios en la URL (problema común con Neon)
     if ' ' in DATABASE_URL:
         logger.warning("⚠️  URL contiene espacios, corrigiendo...")
         DATABASE_URL = DATABASE_URL.replace(' ', '')
     
     app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
-    logger.info(f"📊 Usando: Neon PostgreSQL (Vercel)")
+    logger.info("📊 Usando: Neon PostgreSQL (Vercel)")
     
 else:
-    # Solo usar SQLite si estamos en desarrollo local
+    # Desarrollo local: usar SQLite en carpeta database/
     if not IS_VERCEL:
         logger.warning("⚠️  DATABASE_URL no encontrada, usando SQLite para desarrollo local")
-        basedir = os.path.abspath(os.path.dirname(__file__))
-        app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{os.path.join(basedir, "egresados.db")}'
-        logger.info("📊 Usando: SQLite local")
+        
+        # Crear carpeta database si no existe
+        database_dir = os.path.join(current_dir, 'database')
+        if not os.path.exists(database_dir):
+            os.makedirs(database_dir)
+            logger.info(f"✅ Carpeta 'database/' creada en: {database_dir}")
+        
+        db_path = os.path.join(database_dir, 'egresados.db')
+        app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+        logger.info(f"📊 Usando: SQLite local en {db_path}")
     else:
-        # En Vercel sin DATABASE_URL, mostrar error pero NO usar exit(1)
-        logger.error("❌ ERROR CRÍTICO: DATABASE_URL no configurada en Vercel")
-        # Configurar una URI dummy para que Flask no falle
+        # En Vercel sin DATABASE_URL, usar SQLite en memoria temporal
+        logger.error("❌ ERROR: DATABASE_URL no configurada en Vercel")
+        logger.info("⚠️  Usando SQLite en memoria (temporal)")
         app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
 
 # Configuración común
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'clave-secreta-umb-2026-sistema-egresados')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Inicializar SQLAlchemy
+# ========== INICIALIZAR SQLALCHEMY ==========
 try:
     db = SQLAlchemy(app)
     logger.info("✅ SQLAlchemy inicializado correctamente")
 except Exception as e:
     logger.error(f"❌ Error al inicializar SQLAlchemy: {e}")
-    # Si hay error, crear una app mínima que muestre error
+    # Si hay error, mostrar página de error
     @app.route('/')
     def db_error():
         return f'''
@@ -473,6 +525,211 @@ def api_delete_egresado(id):
             'error': str(e)
         }), 500
 
+# ========== RUTAS DE DIAGNÓSTICO ==========
+
+@app.route('/debug-static')
+def debug_static():
+    """Ruta para diagnosticar problemas con archivos estáticos (JSON)"""
+    import os
+    
+    info = {
+        'status': 'ok',
+        'current_directory': current_dir,
+        'static_directory': static_dir,
+        'static_exists': os.path.exists(static_dir),
+        'files': {
+            'css': [],
+            'js': [],
+            'images': []
+        },
+        'urls': {
+            'css': '/static/css/style.css',
+            'js': '/static/js/script.js',
+            'test_image': '/static/images/umb.png'
+        }
+    }
+    
+    if info['static_exists']:
+        for root, dirs, files in os.walk(static_dir):
+            for file in files:
+                file_path = os.path.join(root, file)
+                relative_path = os.path.relpath(file_path, static_dir)
+                file_size = os.path.getsize(file_path)
+                
+                file_info = {
+                    'path': relative_path,
+                    'size_bytes': file_size,
+                    'size_kb': round(file_size / 1024, 2),
+                    'full_path': file_path
+                }
+                
+                if file.endswith('.css'):
+                    info['files']['css'].append(file_info)
+                elif file.endswith('.js'):
+                    info['files']['js'].append(file_info)
+                elif file.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.ico')):
+                    info['files']['images'].append(file_info)
+    
+    return jsonify(info)
+
+@app.route('/verificar-archivos')
+def verificar_archivos():
+    """Ruta HTML para verificar si los archivos estáticos se cargan"""
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>🔍 Verificar Archivos Estáticos - UMB</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+        <style>
+            .file-status { transition: all 0.3s ease; }
+            .file-status:hover { transform: scale(1.02); }
+        </style>
+    </head>
+    <body class="bg-light">
+        <div class="container py-5">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h1 class="h3 mb-0">
+                        <i class="bi bi-search me-2"></i>Verificación de Archivos Estáticos
+                    </h1>
+                </div>
+                <div class="card-body">
+                    <p class="lead">Esta página verifica si los archivos CSS, JavaScript e imágenes se cargan correctamente en Vercel.</p>
+                    
+                    <div class="row mt-4">
+                        <div class="col-md-4">
+                            <div class="card file-status" id="css-card">
+                                <div class="card-body text-center">
+                                    <i class="bi bi-filetype-css display-4 text-primary"></i>
+                                    <h5 class="mt-3">Archivo CSS</h5>
+                                    <p><code>/static/css/style.css</code></p>
+                                    <div id="css-status" class="badge bg-secondary">No verificado</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <div class="card file-status" id="js-card">
+                                <div class="card-body text-center">
+                                    <i class="bi bi-filetype-js display-4 text-warning"></i>
+                                    <h5 class="mt-3">Archivo JavaScript</h5>
+                                    <p><code>/static/js/script.js</code></p>
+                                    <div id="js-status" class="badge bg-secondary">No verificado</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <div class="card file-status" id="image-card">
+                                <div class="card-body text-center">
+                                    <i class="bi bi-image display-4 text-success"></i>
+                                    <h5 class="mt-3">Imagen UMB</h5>
+                                    <p><code>/static/images/umb.png</code></p>
+                                    <div id="image-status" class="badge bg-secondary">No verificado</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-5">
+                        <h4>Acciones</h4>
+                        <div class="d-flex gap-2 mt-3">
+                            <button onclick="verificarTodos()" class="btn btn-primary">
+                                <i class="bi bi-check-circle me-2"></i>Verificar todos los archivos
+                            </button>
+                            <a href="/dashboard" class="btn btn-success">
+                                <i class="bi bi-speedometer2 me-2"></i>Probar Dashboard
+                            </a>
+                            <a href="/debug-static" target="_blank" class="btn btn-info">
+                                <i class="bi bi-code-slash me-2"></i>Ver datos técnicos (JSON)
+                            </a>
+                        </div>
+                    </div>
+                    
+                    <div id="resultados" class="mt-4"></div>
+                </div>
+            </div>
+        </div>
+        
+        <script>
+        function verificarArchivo(url, elementoId, cardId) {
+            return fetch(url)
+                .then(response => {
+                    const elemento = document.getElementById(elementoId);
+                    const card = document.getElementById(cardId);
+                    
+                    if (response.ok) {
+                        elemento.className = 'badge bg-success';
+                        elemento.textContent = '✅ Cargado';
+                        card.classList.add('border-success');
+                        return { success: true, url: url };
+                    } else {
+                        elemento.className = 'badge bg-danger';
+                        elemento.textContent = '❌ Error ' + response.status;
+                        card.classList.add('border-danger');
+                        return { success: false, url: url, status: response.status };
+                    }
+                })
+                .catch(error => {
+                    const elemento = document.getElementById(elementoId);
+                    const card = document.getElementById(cardId);
+                    elemento.className = 'badge bg-danger';
+                    elemento.textContent = '❌ Error de red';
+                    card.classList.add('border-danger');
+                    return { success: false, url: url, error: error.message };
+                });
+        }
+        
+        function verificarTodos() {
+            const resultadosDiv = document.getElementById('resultados');
+            resultadosDiv.innerHTML = '<div class="alert alert-info">Verificando archivos...</div>';
+            
+            const archivos = [
+                {url: '/static/css/style.css', elemento: 'css-status', card: 'css-card'},
+                {url: '/static/js/script.js', elemento: 'js-status', card: 'js-card'},
+                {url: '/static/images/umb.png', elemento: 'image-status', card: 'image-card'}
+            ];
+            
+            Promise.all(archivos.map(archivo => 
+                verificarArchivo(archivo.url, archivo.elemento, archivo.card)
+            )).then(resultados => {
+                const exitosos = resultados.filter(r => r.success).length;
+                const total = resultados.length;
+                
+                if (exitosos === total) {
+                    resultadosDiv.innerHTML = `
+                        <div class="alert alert-success">
+                            <h5><i class="bi bi-check-circle-fill me-2"></i>¡Todos los archivos se cargan correctamente!</h5>
+                            <p>${exitosos} de ${total} archivos verificados exitosamente.</p>
+                            <p>Ahora puedes probar el <a href="/dashboard" class="alert-link">Dashboard</a>.</p>
+                        </div>
+                    `;
+                } else {
+                    const errores = resultados.filter(r => !r.success);
+                    resultadosDiv.innerHTML = `
+                        <div class="alert alert-warning">
+                            <h5><i class="bi bi-exclamation-triangle-fill me-2"></i>Algunos archivos tienen problemas</h5>
+                            <p>${exitosos} de ${total} archivos verificados exitosamente.</p>
+                            <p>Archivos con problemas:</p>
+                            <ul>
+                                ${errores.map(e => `<li><code>${e.url}</code> - ${e.status || e.error}</li>`).join('')}
+                            </ul>
+                            <p>Verifica que los archivos existan en GitHub y que Vercel haya hecho deploy correctamente.</p>
+                        </div>
+                    `;
+                }
+            });
+        }
+        
+        // Verificar automáticamente al cargar la página
+        window.onload = verificarTodos;
+        </script>
+    </body>
+    </html>
+    '''
+
 # ========== RUTAS UTILITARIAS ==========
 
 @app.route('/init')
@@ -786,6 +1043,14 @@ def inject_now():
         'fecha_actual': datetime.now().strftime('%d/%m/%Y'),
         'anio_actual': datetime.now().year
     }
+
+# ========== INICIALIZAR BASE DE DATOS AL INICIAR ==========
+with app.app_context():
+    try:
+        init_database()
+        logger.info("✅ Aplicación inicializada correctamente")
+    except Exception as e:
+        logger.error(f"❌ Error durante inicialización: {e}")
 
 # ========== EJECUCIÓN ==========
 
