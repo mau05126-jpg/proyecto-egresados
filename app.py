@@ -62,16 +62,11 @@ app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'clave-secreta-umb-2026-sistema-egresados')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# FIX CRÍTICO PARA VERCEL + POSTGRESQL: Configuración de conexión
+# FIX CRÍTICO: Configuración simplificada para evitar errores de conexión
+# Eliminamos los parámetros keepalives que causan problemas
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_recycle': 300,
     'pool_pre_ping': True,
-    'connect_args': {
-        'keepalives': 1,
-        'keepalives_idle': 30,
-        'keepalives_interval': 10,
-        'keepalives_count': 5,
-    }
 }
 
 # Inicializar extensiones
@@ -112,7 +107,6 @@ class Egresado(db.Model):
 
 @login_manager.user_loader
 def load_user(user_id):
-    # FIX: Usar get() en lugar de db.session.get() para compatibilidad
     return User.query.get(int(user_id))
 
 # ========== INICIALIZACIÓN CON FIX PARA VERCEL ==========
@@ -129,7 +123,6 @@ def init_database():
                 coordinador = User(username='coordinador')
                 coordinador.set_password('coordinadorUMB2026')
                 db.session.add(coordinador)
-                # FIX: Commit inmediato
                 db.session.commit()
                 print("✅ Usuario coordinador creado: coordinador / coordinadorUMB2026")
             
@@ -155,10 +148,7 @@ def init_database():
 
 # Inicializar base de datos al arrancar
 print("🔄 Inicializando base de datos...")
-if init_database():
-    print("🎉 Aplicación lista para usar")
-else:
-    print("⚠️  Aplicación iniciada con advertencias")
+init_database()
 
 # ========== RUTAS PRINCIPALES ==========
 
@@ -196,21 +186,19 @@ def login():
 def dashboard():
     """Panel de control principal"""
     try:
-        # FIX: Usar with app.app_context() para asegurar sesión
-        with app.app_context():
-            lista_egresados = Egresado.query.order_by(Egresado.nombre_completo).all()
-            
-            total_egresados = len(lista_egresados)
-            titulados = sum(1 for e in lista_egresados if e.estatus == 'Titulado')
-            egresados_count = sum(1 for e in lista_egresados if e.estatus == 'Egresado')
-            seguimiento = sum(1 for e in lista_egresados if e.estatus == 'En seguimiento')
-            
-            return render_template('dashboard.html', 
-                                 total_egresados=total_egresados,
-                                 titulados=titulados,
-                                 egresados_count=egresados_count,
-                                 seguimiento=seguimiento,
-                                 egresados=lista_egresados)
+        lista_egresados = Egresado.query.order_by(Egresado.nombre_completo).all()
+        
+        total_egresados = len(lista_egresados)
+        titulados = sum(1 for e in lista_egresados if e.estatus == 'Titulado')
+        egresados_count = sum(1 for e in lista_egresados if e.estatus == 'Egresado')
+        seguimiento = sum(1 for e in lista_egresados if e.estatus == 'En seguimiento')
+        
+        return render_template('dashboard.html', 
+                             total_egresados=total_egresados,
+                             titulados=titulados,
+                             egresados_count=egresados_count,
+                             seguimiento=seguimiento,
+                             egresados=lista_egresados)
     except Exception as e:
         flash(f'Error al cargar el dashboard: {str(e)}', 'danger')
         return render_template('dashboard.html', 
@@ -226,43 +214,42 @@ def formularios():
     """Formulario para agregar/modificar egresados"""
     if request.method == 'POST':
         try:
-            with app.app_context():
-                matricula = request.form.get('matricula', '').strip()
-                nombre_completo = request.form.get('nombre_completo', '').strip()
-                carrera = request.form.get('carrera', '').strip()
-                generacion = request.form.get('generacion', '').strip()
-                estatus = request.form.get('estatus', '').strip()
-                domicilio = request.form.get('domicilio', '').strip()
-                genero = request.form.get('genero', '').strip()
-                telefono = request.form.get('telefono', '').strip()
-                email = request.form.get('email', '').strip()
-                
-                if not matricula or not nombre_completo or not carrera or not generacion or not estatus:
-                    flash('Todos los campos obligatorios deben ser completados', 'warning')
-                    return redirect(url_for('formularios'))
-                
-                if Egresado.query.filter_by(matricula=matricula).first():
-                    flash('La matrícula ya está registrada', 'danger')
-                    return redirect(url_for('formularios'))
-                
-                nuevo_egresado = Egresado(
-                    matricula=matricula,
-                    nombre_completo=nombre_completo,
-                    carrera=carrera,
-                    generacion=generacion,
-                    estatus=estatus,
-                    domicilio=domicilio if domicilio else None,
-                    genero=genero if genero else None,
-                    telefono=telefono if telefono else None,
-                    email=email if email else None
-                )
-                
-                db.session.add(nuevo_egresado)
-                db.session.commit()
-                
-                flash(f'¡Egresado {nombre_completo} registrado exitosamente!', 'success')
-                return redirect(url_for('dashboard'))
-                
+            matricula = request.form.get('matricula', '').strip()
+            nombre_completo = request.form.get('nombre_completo', '').strip()
+            carrera = request.form.get('carrera', '').strip()
+            generacion = request.form.get('generacion', '').strip()
+            estatus = request.form.get('estatus', '').strip()
+            domicilio = request.form.get('domicilio', '').strip()
+            genero = request.form.get('genero', '').strip()
+            telefono = request.form.get('telefono', '').strip()
+            email = request.form.get('email', '').strip()
+            
+            if not matricula or not nombre_completo or not carrera or not generacion or not estatus:
+                flash('Todos los campos obligatorios deben ser completados', 'warning')
+                return redirect(url_for('formularios'))
+            
+            if Egresado.query.filter_by(matricula=matricula).first():
+                flash('La matrícula ya está registrada', 'danger')
+                return redirect(url_for('formularios'))
+            
+            nuevo_egresado = Egresado(
+                matricula=matricula,
+                nombre_completo=nombre_completo,
+                carrera=carrera,
+                generacion=generacion,
+                estatus=estatus,
+                domicilio=domicilio if domicilio else None,
+                genero=genero if genero else None,
+                telefono=telefono if telefono else None,
+                email=email if email else None
+            )
+            
+            db.session.add(nuevo_egresado)
+            db.session.commit()
+            
+            flash(f'¡Egresado {nombre_completo} registrado exitosamente!', 'success')
+            return redirect(url_for('dashboard'))
+            
         except Exception as e:
             db.session.rollback()
             flash(f'Error al registrar egresado: {str(e)}', 'danger')
@@ -273,55 +260,43 @@ def formularios():
 @app.route('/editar/<int:id>', methods=['GET', 'POST'])
 @login_required
 def editar_egresado(id):
-    """Editar información de un egresado existente - FIX COMPLETO"""
-    try:
-        with app.app_context():
-            egresado = Egresado.query.get_or_404(id)
+    """Editar información de un egresado existente"""
+    egresado = Egresado.query.get_or_404(id)
+    
+    if request.method == 'POST':
+        try:
+            egresado.nombre_completo = request.form.get('nombre_completo', '').strip()
+            egresado.carrera = request.form.get('carrera', '').strip()
+            egresado.generacion = request.form.get('generacion', '').strip()
+            egresado.estatus = request.form.get('estatus', '').strip()
+            egresado.domicilio = request.form.get('domicilio', '').strip()
+            egresado.genero = request.form.get('genero', '').strip()
+            egresado.telefono = request.form.get('telefono', '').strip()
+            egresado.email = request.form.get('email', '').strip()
             
-            if request.method == 'POST':
-                try:
-                    # FIX: Asegurar que los campos se actualicen correctamente
-                    egresado.nombre_completo = request.form.get('nombre_completo', '').strip()
-                    egresado.carrera = request.form.get('carrera', '').strip()
-                    egresado.generacion = request.form.get('generacion', '').strip()
-                    egresado.estatus = request.form.get('estatus', '').strip()
-                    egresado.domicilio = request.form.get('domicilio', '').strip()
-                    egresado.genero = request.form.get('genero', '').strip()
-                    egresado.telefono = request.form.get('telefono', '').strip()
-                    egresado.email = request.form.get('email', '').strip()
-                    
-                    # FIX CRÍTICO: Asegurar el commit
-                    db.session.commit()
-                    
-                    flash(f'¡Información de {egresado.nombre_completo} actualizada exitosamente!', 'success')
-                    return redirect(url_for('dashboard'))
-                    
-                except Exception as e:
-                    db.session.rollback()
-                    flash(f'Error al actualizar información: {str(e)}', 'danger')
-                    return redirect(url_for('dashboard'))
+            db.session.commit()
+            flash(f'¡Información de {egresado.nombre_completo} actualizada exitosamente!', 'success')
+            return redirect(url_for('dashboard'))
             
-            return render_template('editar.html', egresado=egresado)
-            
-    except Exception as e:
-        flash(f'Error al cargar datos para editar: {str(e)}', 'danger')
-        return redirect(url_for('dashboard'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error al actualizar información: {str(e)}', 'danger')
+    
+    return render_template('editar.html', egresado=egresado)
 
 @app.route('/eliminar/<int:id>', methods=['POST'])
 @login_required
 def eliminar_egresado(id):
-    """Eliminar un egresado del sistema - FIX COMPLETO"""
+    """Eliminar un egresado del sistema"""
     if request.method == 'POST':
         try:
-            with app.app_context():
-                egresado = Egresado.query.get_or_404(id)
-                nombre = egresado.nombre_completo
-                
-                db.session.delete(egresado)
-                db.session.commit()
-                
-                flash(f'¡Egresado {nombre} eliminado exitosamente!', 'success')
-                
+            egresado = Egresado.query.get_or_404(id)
+            nombre = egresado.nombre_completo
+            
+            db.session.delete(egresado)
+            db.session.commit()
+            
+            flash(f'¡Egresado {nombre} eliminado exitosamente!', 'success')
         except Exception as e:
             db.session.rollback()
             flash(f'Error al eliminar egresado: {str(e)}', 'danger')
@@ -340,76 +315,54 @@ def logout():
 def init_db():
     """Inicializar base de datos (para Vercel)"""
     try:
-        with app.app_context():
-            db.create_all()
-            
-            # Crear usuario coordinador por defecto si no existe
-            if not User.query.filter_by(username='coordinador').first():
-                coordinador = User(username='coordinador')
-                coordinador.set_password('coordinadorUMB2026')
-                db.session.add(coordinador)
-            
-            # Crear usuario admin por defecto si no existe
-            if not User.query.filter_by(username='admin').first():
-                admin = User(username='admin')
-                admin.set_password('admin123')
-                db.session.add(admin)
-            
-            db.session.commit()
-            
-            return '''
-            <!DOCTYPE html>
-<html>
-<head>
-    <title>✅ Base de datos inicializada</title>
-    <style>
-        body { font-family: Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; margin: 0; }
-        .container { max-width: 600px; width: 90%; background: white; padding: 40px; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center; }
-        .success { color: #10b981; font-size: 2.5rem; margin-bottom: 20px; }
-        h1 { margin: 0 0 20px 0; }
-        p { color: #6b7280; line-height: 1.6; margin-bottom: 30px; }
-        .info { background: #f3f4f6; padding: 20px; border-radius: 10px; margin: 25px 0; text-align: left; }
-        .info h3 { color: #374151; margin-top: 0; }
-        .credentials { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 15px 0; }
-        .cred-item { background: #e5e7eb; padding: 10px; border-radius: 5px; }
-        .btn { display: inline-block; padding: 12px 30px; background: #3b82f6; color: white; text-decoration: none; border-radius: 8px; font-weight: bold; transition: all 0.3s; border: none; cursor: pointer; }
-        .btn:hover { background: #2563eb; transform: translateY(-2px); box-shadow: 0 10px 25px rgba(59, 130, 246, 0.3); }
-        .database-info { background: #dbeafe; color: #1e40af; padding: 12px; border-radius: 8px; margin-top: 20px; font-size: 0.9rem; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="success">✅</div>
-        <h1>Base de datos inicializada</h1>
-        <p>El sistema ha sido configurado correctamente en Neon PostgreSQL.</p>
+        db.create_all()
         
-        <div class="info">
-            <h3>Credenciales de acceso:</h3>
-            <div class="credentials">
-                <div class="cred-item">
-                    <strong>Usuario:</strong> coordinador<br>
-                    <strong>Contraseña:</strong> coordinadorUMB2026
-                </div>
-                <div class="cred-item">
-                    <strong>Usuario:</strong> admin<br>
-                    <strong>Contraseña:</strong> admin123
-                </div>
-            </div>
-            <div class="database-info">
-                ✅ Base de datos: Neon PostgreSQL (Vercel)<br>
-                ✅ Sistema listo para producción
-            </div>
-        </div>
+        # Crear usuario coordinador por defecto si no existe
+        if not User.query.filter_by(username='coordinador').first():
+            coordinador = User(username='coordinador')
+            coordinador.set_password('coordinadorUMB2026')
+            db.session.add(coordinador)
         
-        <a href="/login" class="btn">Ir al Login</a>
-        <div style="margin-top: 20px;">
-            <a href="/" style="color: #6b7280; text-decoration: none; font-size: 0.9rem;">← Volver al inicio</a>
-        </div>
-    </div>
-</body>
-</html>
-            '''
+        # Crear usuario admin por defecto si no existe
+        if not User.query.filter_by(username='admin').first():
+            admin = User(username='admin')
+            admin.set_password('admin123')
+            db.session.add(admin)
+        
+        db.session.commit()
+        
+        return '''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>✅ Base de datos inicializada</title>
+            <style>
+                body { font-family: Arial, sans-serif; background: #f5f5f5; }
+                .container { max-width: 600px; margin: 50px auto; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                .success { color: #28a745; }
+                .info { background: #d1ecf1; padding: 15px; border-radius: 5px; margin: 20px 0; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1 class="success">✅ Base de datos inicializada</h1>
+                <p>El sistema ha sido configurado correctamente.</p>
                 
+                <div class="info">
+                    <h3>Credenciales de acceso:</h3>
+                    <p><strong>Usuario:</strong> coordinador</p>
+                    <p><strong>Contraseña:</strong> coordinadorUMB2026</p>
+                    <p><strong>Usuario:</strong> admin</p>
+                    <p><strong>Contraseña:</strong> admin123</p>
+                    <p class="text-muted mt-2">Base de datos: Neon PostgreSQL (Vercel)</p>
+                </div>
+                
+                <a href="/login" style="display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px;">Ir al Login</a>
+            </div>
+        </body>
+        </html>
+        '''
+            
     except Exception as e:
         return f'''
         <!DOCTYPE html>
@@ -417,25 +370,17 @@ def init_db():
         <head>
             <title>❌ Error de inicialización</title>
             <style>
-                body {{ font-family: Arial, sans-serif; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; margin: 0; }}
-                .container {{ max-width: 600px; width: 90%; background: white; padding: 40px; border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center; }}
-                .error {{ color: #ef4444; font-size: 2.5rem; margin-bottom: 20px; }}
-                h1 {{ margin: 0 0 20px 0; }}
-                .error-details {{ background: #fee2e2; padding: 15px; border-radius: 10px; margin: 20px 0; text-align: left; font-family: monospace; font-size: 0.9rem; }}
-                .btn {{ display: inline-block; padding: 12px 30px; background: #6b7280; color: white; text-decoration: none; border-radius: 8px; font-weight: bold; transition: all 0.3s; }}
-                .btn:hover {{ background: #4b5563; transform: translateY(-2px); }}
+                body {{ font-family: Arial, sans-serif; background: #f5f5f5; }}
+                .container {{ max-width: 600px; margin: 50px auto; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+                .error {{ color: #dc3545; }}
             </style>
         </head>
         <body>
             <div class="container">
-                <div class="error">❌</div>
-                <h1>Error de inicialización</h1>
-                <div class="error-details">
-                    <strong>Detalles del error:</strong><br>
-                    {str(e)}
-                </div>
-                <p>Verifica que la variable de entorno DATABASE_URL esté configurada correctamente en Vercel Dashboard.</p>
-                <a href="/" class="btn">Volver al inicio</a>
+                <h1 class="error">❌ Error de inicialización</h1>
+                <p>Error: {str(e)}</p>
+                <p>Verifica que la variable de entorno DATABASE_URL esté configurada correctamente en Vercel.</p>
+                <a href="/" style="display: inline-block; padding: 10px 20px; background: #6c757d; color: white; text-decoration: none; border-radius: 5px;">Volver al inicio</a>
             </div>
         </body>
         </html>
@@ -445,25 +390,23 @@ def init_db():
 def test_db():
     """Ruta para probar la conexión a la base de datos"""
     try:
-        with app.app_context():
-            count_egresados = Egresado.query.count()
-            count_users = User.query.count()
-            
-            return jsonify({
-                'status': 'success',
-                'message': '✅ Conexión exitosa a Neon PostgreSQL',
-                'database': 'Neon (PostgreSQL)',
-                'stats': {
-                    'egresados': count_egresados,
-                    'usuarios': count_users
-                },
-                'tables': ['egresado', 'users']
-            })
+        count_egresados = Egresado.query.count()
+        count_users = User.query.count()
+        
+        return jsonify({
+            'status': 'success',
+            'message': '✅ Conexión exitosa a la base de datos',
+            'database': 'Neon PostgreSQL' if 'neon' in DATABASE_URL.lower() else 'SQLite temporal',
+            'stats': {
+                'egresados': count_egresados,
+                'usuarios': count_users
+            }
+        })
     except Exception as e:
         return jsonify({
             'status': 'error',
             'error': str(e),
-            'database_url': app.config['SQLALCHEMY_DATABASE_URI'][:50] + '...' if app.config['SQLALCHEMY_DATABASE_URI'] else 'No configurada'
+            'database_url': DATABASE_URL[:50] + '...' if DATABASE_URL else 'No configurada'
         }), 500
 
 # ========== MANEJO DE ERRORES ==========
