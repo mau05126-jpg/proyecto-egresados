@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 # ========== CONFIGURACIÓN FLASK CON ARCHIVOS ESTÁTICOS ==========
 app = Flask(__name__, 
-           static_folder='static',
+           static_folder='api/static',
            static_url_path='/static')
 
 # ========== VERIFICACIÓN DE ARCHIVOS ESTÁTICOS ==========
