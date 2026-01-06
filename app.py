@@ -13,34 +13,34 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
 
 # ========== CONFIGURACIÓN VERCEL + NEON ==========
-app = Flask(__name__, 
-            static_folder='static',  # Asegurar que encuentra archivos estáticos
-            template_folder='templates')
+app = Flask(__name__,
+            static_folder='static',
+            template_folder='templates',
+            static_url_path='/static')
 
 # Obtener DATABASE_URL de las variables de entorno de Vercel
 DATABASE_URL = os.environ.get('DATABASE_URL', '')
 
 print("=" * 60)
 print("🚀 SISTEMA DE CONTROL DE EGRESADOS - UMB")
-print("📊 Configurando conexión a Neon PostgreSQL")
-print(f"✅ DATABASE_URL configurada: {'SÍ' if DATABASE_URL else 'NO'}")
+print("📊 Inicializando sistema...")
 print("=" * 60)
 
 # Formatear correctamente la URL para Neon PostgreSQL
 if DATABASE_URL:
-    # Asegurar que sea postgresql:// no postgres://
     if DATABASE_URL.startswith('postgres://'):
         DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
     
-    # Agregar opciones SSL para Neon
     if 'sslmode' not in DATABASE_URL:
         if '?' in DATABASE_URL:
             DATABASE_URL += '&sslmode=require'
         else:
             DATABASE_URL += '?sslmode=require'
+    print(f"✅ Base de datos: Neon PostgreSQL configurada")
 else:
     print("⚠️  ADVERTENCIA: DATABASE_URL no encontrada")
-    print("ℹ️  Configurando base de datos en memoria para desarrollo")
+    DATABASE_URL = 'sqlite:///temporal.db'
+    print(f"⚠️  Usando base de datos temporal: SQLite")
 
 # Configuración de la aplicación
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
@@ -49,13 +49,6 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_recycle': 300,
     'pool_pre_ping': True,
-    'connect_args': {
-        'connect_timeout': 10,
-        'keepalives': 1,
-        'keepalives_idle': 30,
-        'keepalives_interval': 10,
-        'keepalives_count': 5,
-    }
 }
 
 # Inicializar extensiones
@@ -99,22 +92,22 @@ def load_user(user_id):
 
 # ========== INICIALIZACIÓN DE BASE DE DATOS ==========
 def init_database():
-    """Inicializar la base de datos"""
+    """Inicializar la base de datos al arrancar"""
     try:
         with app.app_context():
-            print("🔧 Verificando/Creando tablas en Neon PostgreSQL...")
+            print("🔧 Verificando/Creando tablas...")
             
-            # Crear tablas si no existen
+            # Crear todas las tablas
             db.create_all()
             
-            # Verificar si ya hay usuarios
+            # Contar registros existentes
             users_count = User.query.count()
             egresados_count = Egresado.query.count()
             
-            print(f"📊 Usuarios en sistema: {users_count}")
+            print(f"👤 Usuarios en sistema: {users_count}")
             print(f"📊 Egresados registrados: {egresados_count}")
             
-            # Crear usuario admin si no existe
+            # Crear usuarios por defecto si no existen
             admin_user = User.query.filter_by(username='admin').first()
             if not admin_user:
                 admin = User(username='admin')
@@ -122,7 +115,6 @@ def init_database():
                 db.session.add(admin)
                 print("✅ Usuario admin creado: admin / admin123")
             
-            # Crear usuario coordinador si no existe
             coordinador_user = User.query.filter_by(username='coordinador').first()
             if not coordinador_user:
                 coordinador = User(username='coordinador')
@@ -130,15 +122,23 @@ def init_database():
                 db.session.add(coordinador)
                 print("✅ Usuario coordinador creado: coordinador / coordinadorUMB2026")
             
+            # Crear usuario rector si no existe
+            rector_user = User.query.filter_by(username='rector').first()
+            if not rector_user:
+                rector = User(username='rector')
+                rector.set_password('rectorUMB2026')
+                db.session.add(rector)
+                print("✅ Usuario rector creado: rector / rectorUMB2026")
+            
             db.session.commit()
-            print("✅ Base de datos inicializada correctamente en Neon")
+            print("✅ Base de datos inicializada correctamente")
             
     except Exception as e:
         print(f"❌ Error al inicializar base de datos: {str(e)}")
-        print(f"🔧 DATABASE_URL: {DATABASE_URL[:50]}...")
 
-# Llamar a la inicialización
-init_database()
+# Inicializar la base de datos
+with app.app_context():
+    init_database()
 
 # ========== RUTAS PRINCIPALES ==========
 @app.route('/')
@@ -161,7 +161,8 @@ def login():
         if user and user.check_password(password):
             login_user(user, remember=True)
             flash(f'¡Bienvenido {user.username}!', 'success')
-            return redirect(url_for('dashboard'))
+            next_page = request.args.get('next')
+            return redirect(next_page) if next_page else redirect(url_for('dashboard'))
         else:
             flash('Usuario o contraseña incorrectos', 'danger')
     
@@ -172,16 +173,16 @@ def login():
 def dashboard():
     """Panel de control principal"""
     try:
-        # Obtener todos los egresados
+        # Obtener todos los egresados ordenados
         lista_egresados = Egresado.query.order_by(Egresado.nombre_completo).all()
         
         # Calcular estadísticas
         total_egresados = len(lista_egresados)
-        titulados = sum(1 for e in lista_egresados if e.estatus == 'Titulado')
-        egresados_count = sum(1 for e in lista_egresados if e.estatus == 'Egresado')
-        seguimiento = sum(1 for e in lista_egresados if e.estatus == 'En seguimiento')
+        titulados = sum(1 for e in lista_egresados if e.estatus and 'titulado' in e.estatus.lower())
+        egresados_count = sum(1 for e in lista_egresados if e.estatus and 'egresado' in e.estatus.lower())
+        seguimiento = sum(1 for e in lista_egresados if e.estatus and 'seguimiento' in e.estatus.lower())
         
-        print(f"📊 Mostrando dashboard con {total_egresados} egresados")
+        print(f"📊 Dashboard: Mostrando {total_egresados} egresados")
         
         return render_template('dashboard.html', 
                              total_egresados=total_egresados,
@@ -216,7 +217,7 @@ def formularios():
             telefono = request.form.get('telefono', '').strip()
             email = request.form.get('email', '').strip()
             
-            print(f"📝 Intentando registrar egresado: {nombre_completo}")
+            print(f"📝 Intentando registrar: {matricula} - {nombre_completo}")
             
             # Validar campos obligatorios
             if not all([matricula, nombre_completo, carrera, generacion, estatus]):
@@ -246,13 +247,13 @@ def formularios():
             db.session.add(nuevo_egresado)
             db.session.commit()
             
-            print(f"✅ Egresado registrado: {nombre_completo} (ID: {nuevo_egresado.id})")
+            print(f"✅ Registrado exitosamente: ID {nuevo_egresado.id}")
             flash(f'¡Egresado {nombre_completo} registrado exitosamente!', 'success')
             return redirect(url_for('dashboard'))
             
         except Exception as e:
             db.session.rollback()
-            print(f"❌ Error al registrar egresado: {str(e)}")
+            print(f"❌ Error al registrar: {str(e)}")
             flash(f'Error al registrar egresado: {str(e)}', 'danger')
             return redirect(url_for('formularios'))
     
@@ -280,7 +281,7 @@ def editar_egresado(id):
             
             db.session.commit()
             
-            print(f"✅ Egresado actualizado: {egresado.nombre_completo}")
+            print(f"✅ Actualizado: {egresado.nombre_completo}")
             flash(f'¡Información de {egresado.nombre_completo} actualizada exitosamente!', 'success')
             return redirect(url_for('dashboard'))
             
@@ -303,7 +304,7 @@ def eliminar_egresado(id):
             db.session.delete(egresado)
             db.session.commit()
             
-            print(f"🗑️ Egresado eliminado: {nombre}")
+            print(f"🗑️ Eliminado: {nombre}")
             flash(f'¡Egresado {nombre} eliminado exitosamente!', 'success')
         except Exception as e:
             db.session.rollback()
@@ -320,73 +321,102 @@ def logout():
     flash('¡Sesión cerrada exitosamente!', 'info')
     return redirect(url_for('index'))
 
-# ========== RUTAS DE INICIALIZACIÓN Y DIAGNÓSTICO ==========
+# ========== RUTAS DE INICIALIZACIÓN ==========
 @app.route('/init')
 def init_db():
-    """Inicializar base de datos (para Vercel)"""
+    """Inicializar base de datos - RUTA ESPECIAL PARA VERCEL"""
     try:
         with app.app_context():
-            # Crear tablas
+            # Crear todas las tablas
             db.create_all()
             
-            # Verificar tablas creadas
-            from sqlalchemy import inspect
-            inspector = inspect(db.engine)
-            tables = inspector.get_table_names()
-            
             # Crear usuarios por defecto
+            usuarios_creados = []
+            
             if not User.query.filter_by(username='admin').first():
                 admin = User(username='admin')
                 admin.set_password('admin123')
                 db.session.add(admin)
-                print("✅ Usuario admin creado")
-                
+                usuarios_creados.append('admin:admin123')
+            
             if not User.query.filter_by(username='coordinador').first():
                 coordinador = User(username='coordinador')
                 coordinador.set_password('coordinadorUMB2026')
                 db.session.add(coordinador)
-                print("✅ Usuario coordinador creado")
+                usuarios_creados.append('coordinador:coordinadorUMB2026')
+            
+            if not User.query.filter_by(username='rector').first():
+                rector = User(username='rector')
+                rector.set_password('rectorUMB2026')
+                db.session.add(rector)
+                usuarios_creados.append('rector:rectorUMB2026')
             
             db.session.commit()
+            
+            # Verificar tablas
+            from sqlalchemy import inspect
+            inspector = inspect(db.engine)
+            tablas = inspector.get_table_names()
             
             return f'''
             <!DOCTYPE html>
             <html>
             <head>
-                <title>✅ Base de datos inicializada</title>
+                <title>✅ Sistema Inicializado</title>
+                <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
                 <style>
-                    body {{ font-family: Arial, sans-serif; background: #f5f5f5; }}
-                    .container {{ max-width: 800px; margin: 50px auto; padding: 30px; background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
-                    .success {{ color: #28a745; }}
-                    .info {{ background: #d1ecf1; padding: 20px; border-radius: 5px; margin: 20px 0; }}
-                    table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
-                    th, td {{ padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }}
-                    th {{ background: #007bff; color: white; }}
+                    body {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }}
+                    .card {{ border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }}
+                    .success-icon {{ color: #28a745; font-size: 4rem; }}
                 </style>
             </head>
-            <body>
+            <body class="d-flex align-items-center">
                 <div class="container">
-                    <h1 class="success">✅ Base de datos inicializada</h1>
-                    <p>El sistema ha sido configurado correctamente en Neon PostgreSQL.</p>
-                    
-                    <h3>📊 Tablas creadas:</h3>
-                    <table>
-                        <tr><th>Tabla</th><th>Estado</th></tr>
-                        {' '.join([f'<tr><td>{table}</td><td>✅ Creada</td></tr>' for table in tables])}
-                    </table>
-                    
-                    <div class="info">
-                        <h3>👤 Credenciales de acceso:</h3>
-                        <p><strong>Usuario coordinador:</strong> coordinador</p>
-                        <p><strong>Contraseña:</strong> coordinadorUMB2026</p>
-                        <p><strong>Usuario admin:</strong> admin</p>
-                        <p><strong>Contraseña:</strong> admin123</p>
-                        <p><strong>Base de datos:</strong> Neon PostgreSQL (Vercel)</p>
+                    <div class="row justify-content-center">
+                        <div class="col-md-8 col-lg-6">
+                            <div class="card p-4">
+                                <div class="text-center mb-4">
+                                    <div class="success-icon">
+                                        <i class="bi bi-check-circle-fill"></i>
+                                    </div>
+                                    <h1 class="text-success">✅ Sistema Inicializado</h1>
+                                </div>
+                                
+                                <div class="alert alert-success">
+                                    <h5>Base de datos configurada exitosamente</h5>
+                                    <p><strong>URL:</strong> {DATABASE_URL[:50]}...</p>
+                                    <p><strong>Tablas creadas:</strong> {', '.join(tablas)}</p>
+                                </div>
+                                
+                                <div class="alert alert-info">
+                                    <h5>👤 Usuarios disponibles:</h5>
+                                    <ul class="mb-0">
+                                        {' '.join([f'<li><strong>{u.split(":")[0]}</strong> / {u.split(":")[1]}</li>' for u in usuarios_creados])}
+                                    </ul>
+                                </div>
+                                
+                                <div class="d-grid gap-2">
+                                    <a href="/login" class="btn btn-success btn-lg">
+                                        <i class="bi bi-box-arrow-in-right"></i> Ir al Login
+                                    </a>
+                                    <a href="/test-db" class="btn btn-outline-primary">
+                                        <i class="bi bi-database-check"></i> Probar Conexión
+                                    </a>
+                                    <a href="/dashboard" class="btn btn-outline-secondary">
+                                        <i class="bi bi-speedometer2"></i> Ir al Dashboard
+                                    </a>
+                                </div>
+                                
+                                <div class="mt-4 text-center text-muted">
+                                    <small>Sistema de Control de Egresados - UMB © {datetime.now().year}</small>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    
-                    <a href="/login" style="display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; margin-right: 10px;">Ir al Login</a>
-                    <a href="/test-db" style="display: inline-block; padding: 10px 20px; background: #28a745; color: white; text-decoration: none; border-radius: 5px;">Probar Conexión</a>
                 </div>
+                
+                <!-- Bootstrap Icons -->
+                <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
             </body>
             </html>
             '''
@@ -396,19 +426,24 @@ def init_db():
         <!DOCTYPE html>
         <html>
         <head>
-            <title>❌ Error de inicialización</title>
-            <style>
-                body {{ font-family: Arial, sans-serif; background: #f5f5f5; }}
-                .container {{ max-width: 600px; margin: 50px auto; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
-                .error {{ color: #dc3545; }}
-            </style>
+            <title>❌ Error de Inicialización</title>
+            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
         </head>
-        <body>
+        <body class="bg-light d-flex align-items-center">
             <div class="container">
-                <h1 class="error">❌ Error de inicialización</h1>
-                <p><strong>Error:</strong> {str(e)}</p>
-                <p>Verifica que la variable de entorno DATABASE_URL esté configurada correctamente en Vercel.</p>
-                <a href="/" style="display: inline-block; padding: 10px 20px; background: #6c757d; color: white; text-decoration: none; border-radius: 5px;">Volver al inicio</a>
+                <div class="row justify-content-center">
+                    <div class="col-md-6">
+                        <div class="card shadow">
+                            <div class="card-body text-center">
+                                <h1 class="text-danger">❌ Error de Inicialización</h1>
+                                <div class="alert alert-danger mt-3">
+                                    <p><strong>Error:</strong> {str(e)}</p>
+                                </div>
+                                <a href="/" class="btn btn-secondary mt-3">Volver al inicio</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </body>
         </html>
@@ -429,7 +464,7 @@ def test_db():
             return jsonify({
                 'status': 'success',
                 'message': '✅ Conexión exitosa a la base de datos',
-                'database': 'Neon PostgreSQL',
+                'database': 'Neon PostgreSQL' if 'neon' in DATABASE_URL or 'postgresql' in DATABASE_URL else 'SQLite',
                 'stats': {
                     'total_egresados': count_egresados,
                     'total_usuarios': count_users
@@ -438,7 +473,9 @@ def test_db():
                     {
                         'id': e.id,
                         'matricula': e.matricula,
-                        'nombre': e.nombre_completo
+                        'nombre': e.nombre_completo,
+                        'carrera': e.carrera,
+                        'estatus': e.estatus
                     } for e in egresados
                 ] if egresados else []
             })
@@ -446,7 +483,7 @@ def test_db():
         return jsonify({
             'status': 'error',
             'error': str(e),
-            'database_url': DATABASE_URL[:50] + '...' if DATABASE_URL else 'No configurada'
+            'database_url': DATABASE_URL[:100] + '...' if DATABASE_URL else 'No configurada'
         }), 500
 
 # ========== EXPORTACIÓN DE DATOS ==========
@@ -458,40 +495,25 @@ def exportar_egresados(formato):
         # Obtener todos los egresados
         egresados = Egresado.query.all()
         
-        # Calcular estadísticas
-        total_egresados = len(egresados)
-        titulados = len([e for e in egresados if e.estatus == 'Titulado'])
-        egresados_count = len([e for e in egresados if e.estatus == 'Egresado'])
-        seguimiento = len([e for e in egresados if e.estatus == 'En seguimiento'])
-        
-        print(f"📤 Exportando {total_egresados} egresados en formato {formato}")
-        
-        # Preparar datos
-        datos = []
-        for e in egresados:
-            datos.append({
-                'Matrícula': e.matricula,
-                'Nombre': e.nombre_completo,
-                'Carrera': e.carrera,
-                'Generación': e.generacion,
-                'Estatus': e.estatus,
-                'Teléfono': e.telefono,
-                'Email': e.email,
-                'Fecha Registro': e.fecha_registro.strftime('%d/%m/%Y') if e.fecha_registro else ''
-            })
-        
         if formato == 'excel':
             # Exportar a Excel
+            datos = []
+            for e in egresados:
+                datos.append({
+                    'Matrícula': e.matricula,
+                    'Nombre Completo': e.nombre_completo,
+                    'Carrera': e.carrera,
+                    'Generación': e.generacion,
+                    'Estatus': e.estatus,
+                    'Teléfono': e.telefono,
+                    'Email': e.email,
+                    'Fecha Registro': e.fecha_registro.strftime('%d/%m/%Y') if e.fecha_registro else ''
+                })
+            
             df = pd.DataFrame(datos)
             output = BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                 df.to_excel(writer, index=False, sheet_name='Egresados')
-                # Agregar hoja de resumen
-                resumen = {
-                    'Categoría': ['Total Egresados', 'Titulados', 'Egresados', 'En Seguimiento'],
-                    'Cantidad': [total_egresados, titulados, egresados_count, seguimiento]
-                }
-                pd.DataFrame(resumen).to_excel(writer, index=False, sheet_name='Resumen')
             
             output.seek(0)
             return send_file(
@@ -504,12 +526,12 @@ def exportar_egresados(formato):
         elif formato == 'csv':
             # Exportar a CSV
             output = BytesIO()
-            # Escribir encabezados
             output.write('Matrícula,Nombre Completo,Carrera,Generación,Estatus,Teléfono,Email,Fecha Registro\n'.encode('utf-8'))
-            # Escribir datos
+            
             for e in egresados:
                 linea = f'"{e.matricula}","{e.nombre_completo}","{e.carrera}","{e.generacion}","{e.estatus}","{e.telefono}","{e.email}","{e.fecha_registro.strftime("%d/%m/%Y") if e.fecha_registro else ""}"\n'
                 output.write(linea.encode('utf-8'))
+            
             output.seek(0)
             return send_file(
                 output,
@@ -521,95 +543,33 @@ def exportar_egresados(formato):
         elif formato == 'pdf':
             # Exportar a PDF
             buffer = BytesIO()
-            doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), 
-                                    rightMargin=30, leftMargin=30,
-                                    topMargin=30, bottomMargin=30)
+            doc = SimpleDocTemplate(buffer, pagesize=landscape(letter))
             elements = []
-            
             styles = getSampleStyleSheet()
             
             # Título
-            title = Paragraph(
-                f"<para align=center><b>REPORTE DE EGRESADOS</b><br/>"
-                f"<font size=12>Universidad Mexiquense del Bicentenario</font><br/>"
-                f"<font size=10>Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')}</font></para>", 
-                styles["Heading1"]
-            )
+            title = Paragraph(f"<para align=center><b>REPORTE DE EGRESADOS UMB</b><br/>Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')}</para>", styles["Heading1"])
             elements.append(title)
-            
             elements.append(Paragraph("<br/>", styles["Normal"]))
             
             # Tabla de datos
-            tabla_datos = [['MATRÍCULA', 'NOMBRE COMPLETO', 'CARRERA', 'GENERACIÓN', 'ESTATUS']]
-            
+            tabla_datos = [['Matrícula', 'Nombre', 'Carrera', 'Generación', 'Estatus']]
             for e in egresados:
-                nombre = e.nombre_completo[:40] + '...' if len(e.nombre_completo) > 40 else e.nombre_completo
-                carrera = e.carrera[:60] + '...' if len(e.carrera) > 60 else e.carrera
-                tabla_datos.append([
-                    e.matricula,
-                    nombre,
-                    carrera,
-                    e.generacion,
-                    e.estatus
-                ])
+                tabla_datos.append([e.matricula, e.nombre_completo[:30], e.carrera[:25], e.generacion, e.estatus])
             
-            tabla = Table(tabla_datos, colWidths=[80, 150, 280, 80, 70])
+            tabla = Table(tabla_datos, colWidths=[70, 140, 120, 60, 70])
             tabla.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2E7D32')),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 10),
-                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-                ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
-                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-                ('FONTSIZE', (0, 1), (-1, -1), 9),
-                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F9F9F9')]),
-                ('ALIGN', (0, 1), (0, -1), 'CENTER'),
-                ('ALIGN', (3, 1), (3, -1), 'CENTER'),
-                ('ALIGN', (4, 1), (4, -1), 'CENTER'),
-                ('WORDWRAP', (2, 1), (2, -1), True),
+                ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#A9D979')),
+                ('TEXTCOLOR', (0,0), (-1,0), colors.black),
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0,0), (-1,0), 10),
+                ('BOTTOMPADDING', (0,0), (-1,0), 12),
+                ('BACKGROUND', (0,1), (-1,-1), colors.beige),
+                ('GRID', (0,0), (-1,-1), 1, colors.black)
             ]))
             
             elements.append(tabla)
-            
-            # Resumen
-            elements.append(Paragraph("<br/><br/>", styles["Normal"]))
-            
-            resumen_datos = [
-                ['ESTADÍSTICAS', 'CANTIDAD', 'PORCENTAJE'],
-                ['Total Egresados', str(total_egresados), '100%'],
-                ['Titulados', str(titulados), f"{(titulados/total_egresados*100):.1f}%" if total_egresados > 0 else '0%'],
-                ['Egresados', str(egresados_count), f"{(egresados_count/total_egresados*100):.1f}%" if total_egresados > 0 else '0%'],
-                ['En Seguimiento', str(seguimiento), f"{(seguimiento/total_egresados*100):.1f}%" if total_egresados > 0 else '0%']
-            ]
-            
-            tabla_resumen = Table(resumen_datos, colWidths=[120, 80, 80])
-            tabla_resumen.setStyle(TableStyle([
-                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1565C0')),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 10),
-                ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#E3F2FD')),
-                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-            ]))
-            
-            elements.append(Paragraph("<b>RESUMEN ESTADÍSTICO</b>", styles["Normal"]))
-            elements.append(tabla_resumen)
-            
-            # Pie de página
-            elements.append(Paragraph("<br/><br/>", styles["Normal"]))
-            footer = Paragraph(
-                "<font size=8><i>Sistema de Control de Egresados - UMB<br/>"
-                "Base de datos: Neon PostgreSQL<br/>"
-                "Documento generado automáticamente</i></font>",
-                styles["Normal"]
-            )
-            elements.append(footer)
-            
             doc.build(elements)
             buffer.seek(0)
             
@@ -620,23 +580,13 @@ def exportar_egresados(formato):
                 mimetype='application/pdf'
             )
         
+        flash('Formato no válido', 'warning')
         return redirect('/dashboard')
-    
+        
     except Exception as e:
         print(f"❌ Error al exportar: {str(e)}")
         flash(f'Error al exportar: {str(e)}', 'danger')
         return redirect('/dashboard')
-
-# ========== RUTA PARA VER EGRESADO ==========
-@app.route('/egresado/<int:id>')
-def ver_egresado(id):
-    """Ver información detallada de un egresado"""
-    try:
-        egresado = Egresado.query.get_or_404(id)
-        return render_template('ver_egresado.html', egresado=egresado)
-    except Exception as e:
-        flash(f'Error al cargar información del egresado: {str(e)}', 'danger')
-        return redirect(url_for('dashboard'))
 
 # ========== MANEJO DE ERRORES ==========
 @app.errorhandler(404)
@@ -651,6 +601,17 @@ def error_servidor(error):
 def no_autorizado(error):
     flash('Debes iniciar sesión para acceder a esta página', 'warning')
     return redirect(url_for('login'))
+
+# ========== RUTA PARA VER EGRESADO ==========
+@app.route('/egresado/<int:id>')
+def ver_egresado(id):
+    """Ver información detallada de un egresado"""
+    try:
+        egresado = Egresado.query.get_or_404(id)
+        return render_template('ver_egresado.html', egresado=egresado)
+    except Exception as e:
+        flash(f'Error al cargar información del egresado: {str(e)}', 'danger')
+        return redirect(url_for('dashboard'))
 
 # ========== CONTEXT PROCESSOR ==========
 @app.context_processor
@@ -669,8 +630,7 @@ if __name__ == '__main__':
     print("Instrucciones:")
     print("1. Visita http://localhost:5000/init para inicializar BD")
     print("2. Usuario: coordinador / Contraseña: coordinadorUMB2026")
-    print("3. O Usuario: admin / Contraseña: admin123")
-    print("4. Visita http://localhost:5000/test-db para probar conexión")
+    print("3. Visita http://localhost:5000/test-db para probar conexión")
     print("=" * 60)
     
     app.run(debug=True, host='0.0.0.0', port=5000)
