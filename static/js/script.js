@@ -1,48 +1,39 @@
-
-
-/* dashboard */
-
+/**
+ * SISTEMA DE CONTROL DE EGRESADOS - UMB
+ * JavaScript unificado y corregido
+ */
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Buscador
-    const searchInput = document.getElementById('searchInput');
-    const table = document.getElementById('egresadosTable');
+    console.log('✅ Script cargado correctamente');
     
-    if (searchInput && table) {
-        searchInput.addEventListener('keyup', function() {
+    // ========== DASHBOARD - BÚSQUEDA ==========
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
             const filter = this.value.toLowerCase();
-            const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+            const rows = document.querySelectorAll('#egresadosTable tbody tr');
             
-            for (let row of rows) {
-                const cells = row.getElementsByTagName('td');
-                let found = false;
-                
-                for (let cell of cells) {
-                    if (cell.textContent.toLowerCase().includes(filter)) {
-                        found = true;
-                        break;
-                    }
-                }
-                
-                row.style.display = found ? '' : 'none';
-            }
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(filter) ? '' : 'none';
+            });
         });
     }
     
-    // Modal de eliminación
-    const deleteButtons = document.querySelectorAll('.delete-btn');
-    const deleteForm = document.getElementById('deleteForm');
+    // ========== DASHBOARD - MODAL DE ELIMINACIÓN ==========
     const deleteModal = document.getElementById('confirmDeleteModal');
-    
-    deleteButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            // Obtener datos del egresado
-            const id = this.getAttribute('data-id');
-            const matricula = this.getAttribute('data-matricula');
-            const nombre = this.getAttribute('data-nombre');
-            const carrera = this.getAttribute('data-carrera');
-            const generacion = this.getAttribute('data-generacion');
-            const estatus = this.getAttribute('data-estatus');
+    if (deleteModal) {
+        // Usar el evento de Bootstrap 5 para el modal
+        deleteModal.addEventListener('show.bs.modal', function(event) {
+            const button = event.relatedTarget; // Botón que activó el modal
+            
+            // Obtener datos de los atributos data-*
+            const id = button.getAttribute('data-id');
+            const matricula = button.getAttribute('data-matricula');
+            const nombre = button.getAttribute('data-nombre');
+            const carrera = button.getAttribute('data-carrera');
+            const generacion = button.getAttribute('data-generacion');
+            const estatus = button.getAttribute('data-estatus');
             
             // Actualizar contenido del modal
             document.getElementById('deleteMatricula').textContent = matricula;
@@ -50,244 +41,146 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('deleteCarrera').textContent = carrera;
             document.getElementById('deleteGeneracion').textContent = generacion;
             
-            // Estilo para el badge de estatus
+            // Actualizar badge de estatus
             const estatusBadge = document.getElementById('deleteEstatus');
             estatusBadge.textContent = estatus;
-            estatusBadge.className = 'badge ';
-            
-            if (estatus === 'Titulado') {
-                estatusBadge.classList.add('bg-success');
-            } else if (estatus === 'Egresado') {
-                estatusBadge.classList.add('bg-primary');
-            } else {
-                estatusBadge.classList.add('bg-warning', 'text-dark');
-            }
+            estatusBadge.className = 'badge ' + 
+                (estatus === 'Titulado' ? 'bg-success' : 
+                 estatus === 'Egresado' ? 'bg-primary' : 
+                 'bg-warning text-dark');
             
             // Actualizar acción del formulario
-            deleteForm.action = `/eliminar/${id}`;
+            document.getElementById('deleteForm').action = '/eliminar/' + id;
         });
-    });
-    
-    // Limpiar modal al cerrar
-    if (deleteModal) {
-        deleteModal.addEventListener('hidden.bs.modal', function () {
+        
+        // Limpiar modal al cerrar
+        deleteModal.addEventListener('hidden.bs.modal', function() {
             document.getElementById('deleteMatricula').textContent = '';
             document.getElementById('deleteNombre').textContent = '';
             document.getElementById('deleteCarrera').textContent = '';
             document.getElementById('deleteGeneracion').textContent = '';
             document.getElementById('deleteEstatus').textContent = '';
-            deleteForm.action = '';
+            document.getElementById('deleteForm').action = '';
         });
     }
-});
-
-
-
-// Editar Egresado - Validación de formulario y mejoras de UX
-
-document.addEventListener('DOMContentLoaded', function() {
-    const form = document.getElementById('editarEgresadoForm');
     
-    // Validación al enviar
-    form.addEventListener('submit', function(e) {
-        let isValid = true;
-        const requiredFields = form.querySelectorAll('[required]');
-        
-        requiredFields.forEach(field => {
-            if (!field.value.trim()) {
-                showFieldError(field, 'Este campo es obligatorio');
-                isValid = false;
-                
-                if (isValid === false) {
-                    field.focus();
-                }
-            } else {
-                clearFieldError(field);
-            }
-        });
-        
-        if (!isValid) {
-            e.preventDefault();
-            
-            // Mostrar mensaje de error general
-            const errorAlert = document.createElement('div');
-            errorAlert.className = 'alert alert-danger alert-dismissible fade show mt-3';
-            errorAlert.innerHTML = `
-                <i class="fas fa-exclamation-triangle me-2"></i>
-                <strong>Error:</strong> Por favor completa todos los campos obligatorios correctamente.
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            `;
-            
-            // Insertar después del formulario
-            form.parentNode.insertBefore(errorAlert, form.nextSibling);
-            
-            setTimeout(() => {
-                if (errorAlert.parentNode) {
-                    errorAlert.remove();
-                }
-            }, 5000);
-        } else {
-            // Animación de éxito antes de enviar
-            const submitBtn = form.querySelector('.btn-primary-lg');
-            const originalText = submitBtn.innerHTML;
-            
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Actualizando...';
-            submitBtn.disabled = true;
-            
-            // Simular carga (en producción esto ocurriría realmente)
-            setTimeout(() => {
-                submitBtn.innerHTML = originalText;
-                submitBtn.disabled = false;
-            }, 1500);
-        }
-    });
+    // ========== FORMULARIOS - VALIDACIÓN GENERAL ==========
     
-    // Funciones de ayuda
-    function showFieldError(field, message) {
-        field.classList.add('is-invalid');
-        field.classList.remove('is-valid');
-        
-        // Remover mensaje anterior si existe
-        let existingFeedback = field.parentNode.querySelector('.invalid-feedback');
-        if (existingFeedback) {
-            existingFeedback.remove();
-        }
-        
-        // Crear nuevo mensaje
-        const feedback = document.createElement('div');
-        feedback.className = 'invalid-feedback';
-        feedback.textContent = message;
-        field.parentNode.appendChild(feedback);
+    // Validación para formulario de NUEVO egresado
+    const formEgresado = document.getElementById('egresadoForm');
+    if (formEgresado) {
+        setupFormValidation(formEgresado, 'guardar');
     }
     
-    function clearFieldError(field) {
-        field.classList.remove('is-invalid');
-        
-        // Remover mensaje si existe
-        const feedback = field.parentNode.querySelector('.invalid-feedback');
-        if (feedback) {
-            feedback.remove();
-        }
+    // Validación para formulario de EDITAR egresado
+    const formEditar = document.getElementById('editarEgresadoForm');
+    if (formEditar) {
+        setupFormValidation(formEditar, 'actualizar');
     }
     
-    // Mejorar experiencia de usuario
-    const inputs = form.querySelectorAll('input, select');
-    inputs.forEach(input => {
-        input.addEventListener('focus', function() {
-            if (!this.disabled) {
-                this.parentNode.style.transform = 'scale(1.02)';
-            }
-        });
-        
-        input.addEventListener('blur', function() {
-            this.parentNode.style.transform = 'scale(1)';
-        });
-    });
-    
-    // Asegurar que el texto del botón Cancelar sea negro en hover
-    const cancelBtn = document.querySelector('.btn-cancel-lg');
-    if (cancelBtn) {
-        cancelBtn.addEventListener('mouseenter', function() {
-            this.style.color = '#000000';
-        });
-        
-        cancelBtn.addEventListener('mouseleave', function() {
-            this.style.color = '';
-        });
-    }
-});
-
-
-
-// Formularios
-
-document.addEventListener('DOMContentLoaded', function() {
-    const form = document.getElementById('egresadoForm');
-    const matriculaInput = document.getElementById('matricula');
-    
-    // Validación de matrícula en tiempo real
-    if (matriculaInput) {
-        matriculaInput.addEventListener('input', function() {
-            // Solo números
+    // ========== VALIDACIÓN DE MATRÍCULA EN TIEMPO REAL ==========
+    const matriculaInputs = document.querySelectorAll('input[name="matricula"], #matricula');
+    matriculaInputs.forEach(input => {
+        input.addEventListener('input', function() {
+            // Solo números y limitar a 20 caracteres (PostgreSQL permite hasta 20)
             this.value = this.value.replace(/\D/g, '');
             
-            // Limitar a 8 dígitos
-            if (this.value.length > 8) {
-                this.value = this.value.slice(0, 8);
+            if (this.value.length > 20) {
+                this.value = this.value.slice(0, 20);
             }
             
             // Validación visual
             validateMatricula(this);
         });
         
-        matriculaInput.addEventListener('blur', function() {
+        input.addEventListener('blur', function() {
             validateMatricula(this);
+        });
+    });
+    
+    // ========== MEJORAS DE UX ==========
+    
+    // Efecto hover en campos
+    const formInputs = document.querySelectorAll('.form-control, .form-select');
+    formInputs.forEach(input => {
+        input.addEventListener('focus', function() {
+            this.parentElement.classList.add('input-focused');
+        });
+        
+        input.addEventListener('blur', function() {
+            this.parentElement.classList.remove('input-focused');
+        });
+    });
+    
+    // Auto-ocultar alertas después de 5 segundos
+    const alerts = document.querySelectorAll('.alert:not(.alert-permanent)');
+    alerts.forEach(alert => {
+        setTimeout(() => {
+            if (alert.parentNode) {
+                const bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            }
+        }, 5000);
+    });
+    
+    // ========== FUNCIONES AUXILIARES ==========
+    
+    function setupFormValidation(form, actionType) {
+        form.addEventListener('submit', function(e) {
+            let isValid = true;
+            const requiredFields = form.querySelectorAll('[required]');
+            
+            requiredFields.forEach(field => {
+                if (!field.value.trim()) {
+                    showFieldError(field, 'Este campo es obligatorio');
+                    isValid = false;
+                    
+                    // Enfocar el primer campo inválido
+                    if (!isValid) {
+                        field.focus();
+                    }
+                } else {
+                    clearFieldError(field);
+                }
+            });
+            
+            // Validación específica para matrícula
+            const matriculaInput = form.querySelector('#matricula, input[name="matricula"]');
+            if (matriculaInput && matriculaInput.value.trim()) {
+                const value = matriculaInput.value.trim();
+                if (value.length < 8 || value.length > 20) {
+                    showFieldError(matriculaInput, 'La matrícula debe tener entre 8 y 20 dígitos');
+                    isValid = false;
+                    matriculaInput.focus();
+                }
+            }
+            
+            if (!isValid) {
+                e.preventDefault();
+                
+                // Mostrar mensaje de error general
+                showAlert(form, 'danger', 'Error: Por favor completa todos los campos obligatorios correctamente.');
+            } else {
+                // Animación de carga en el botón de enviar
+                const submitBtn = form.querySelector('button[type="submit"]');
+                if (submitBtn) {
+                    const originalText = submitBtn.innerHTML;
+                    const originalDisabled = submitBtn.disabled;
+                    
+                    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> ' + 
+                                          (actionType === 'guardar' ? 'Guardando...' : 'Actualizando...');
+                    submitBtn.disabled = true;
+                    
+                    // Si el formulario no se envía (error), restaurar botón después de 3 segundos
+                    setTimeout(() => {
+                        submitBtn.innerHTML = originalText;
+                        submitBtn.disabled = originalDisabled;
+                    }, 3000);
+                }
+            }
         });
     }
     
-    // Validación al enviar
-    form.addEventListener('submit', function(e) {
-        let isValid = true;
-        const requiredFields = form.querySelectorAll('[required]');
-        
-        requiredFields.forEach(field => {
-            if (!field.value.trim()) {
-                showFieldError(field, 'Este campo es obligatorio');
-                isValid = false;
-                
-                if (isValid === false) {
-                    field.focus();
-                }
-            } else {
-                clearFieldError(field);
-            }
-        });
-        
-        // Validación específica para matrícula
-        if (matriculaInput && matriculaInput.value.trim()) {
-            if (matriculaInput.value.length !== 8) {
-                showFieldError(matriculaInput, 'La matrícula debe tener 8 dígitos');
-                isValid = false;
-                matriculaInput.focus();
-            }
-        }
-        
-        if (!isValid) {
-            e.preventDefault();
-            
-            // Mostrar mensaje de error general
-            const errorAlert = document.createElement('div');
-            errorAlert.className = 'alert alert-danger alert-dismissible fade show mt-3';
-            errorAlert.innerHTML = `
-                <i class="fas fa-exclamation-triangle me-2"></i>
-                <strong>Error:</strong> Por favor completa todos los campos obligatorios correctamente.
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            `;
-            
-            // Insertar después del formulario
-            form.parentNode.insertBefore(errorAlert, form.nextSibling);
-            
-            setTimeout(() => {
-                if (errorAlert.parentNode) {
-                    errorAlert.remove();
-                }
-            }, 5000);
-        } else {
-            // Animación de éxito antes de enviar
-            const submitBtn = form.querySelector('.btn-primary-lg');
-            const originalText = submitBtn.innerHTML;
-            
-            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Guardando...';
-            submitBtn.disabled = true;
-            
-            setTimeout(() => {
-                submitBtn.innerHTML = originalText;
-                submitBtn.disabled = false;
-            }, 1500);
-        }
-    });
-    
-    // Funciones de ayuda
     function validateMatricula(field) {
         const value = field.value.trim();
         
@@ -296,14 +189,14 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        if (value.length === 8) {
+        if (value.length >= 8 && value.length <= 20) {
             field.classList.remove('is-invalid');
             field.classList.add('is-valid');
             clearFieldError(field);
         } else {
             field.classList.remove('is-valid');
             field.classList.add('is-invalid');
-            showFieldError(field, `Faltan ${8 - value.length} dígitos`);
+            showFieldError(field, `La matrícula debe tener entre 8 y 20 dígitos (tienes ${value.length})`);
         }
     }
     
@@ -325,7 +218,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function clearFieldError(field) {
-        field.classList.remove('is-invalid');
+        field.classList.remove('is-invalid', 'is-valid');
         
         // Remover mensaje si existe
         const feedback = field.parentNode.querySelector('.invalid-feedback');
@@ -334,26 +227,21 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Mejorar experiencia de usuario
-    const inputs = form.querySelectorAll('input, select');
-    inputs.forEach(input => {
-        input.addEventListener('focus', function() {
-            this.parentNode.style.transform = 'scale(1.02)';
-        });
+    function showAlert(form, type, message) {
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show mt-3`;
+        alertDiv.innerHTML = `
+            <i class="bi ${type === 'danger' ? 'bi-exclamation-triangle' : 'bi-info-circle'} me-2"></i>
+            <strong>${type === 'danger' ? 'Error:' : 'Información:'}</strong> ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
         
-        input.addEventListener('blur', function() {
-            this.parentNode.style.transform = 'scale(1)';
-        });
-    });
-    
-    const cancelBtn = document.querySelector('.btn-cancel-lg');
-    if (cancelBtn) {
-        cancelBtn.addEventListener('mouseenter', function() {
-            this.style.color = '#000000';
-        });
+        form.parentNode.insertBefore(alertDiv, form.nextSibling);
         
-        cancelBtn.addEventListener('mouseleave', function() {
-            this.style.color = '';
-        });
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.remove();
+            }
+        }, 5000);
     }
 });
