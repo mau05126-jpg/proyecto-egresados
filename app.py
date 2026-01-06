@@ -1,5 +1,6 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file, make_response
+import sys
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -7,14 +8,12 @@ from datetime import datetime
 import pandas as pd
 from io import BytesIO
 from reportlab.lib.pagesizes import letter, landscape
-from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
-from sqlalchemy import text
 from dotenv import load_dotenv
 
-# ========== CONFIGURACIÓN PARA VERCEL + NEON ==========
+# ========== CONFIGURACIÓN PARA VERCEL ==========
 
 # En Vercel, las variables de entorno vienen de os.environ, no de .env
 app = Flask(__name__)
@@ -24,7 +23,7 @@ DATABASE_URL = os.environ.get('DATABASE_URL', '')
 
 # DEBUG: Verificar si las variables están cargadas
 print("=" * 60)
-print("🚀 SISTEMA DE CONTROL DE EGRESADOS - UMB")
+print("🚀 INICIANDO APLICACIÓN EN VERCEL")
 print(f"✅ DATABASE_URL configurada: {'SÍ' if DATABASE_URL else 'NO'}")
 print(f"✅ SECRET_KEY configurada: {'SÍ' if os.environ.get('SECRET_KEY') else 'NO'}")
 print("=" * 60)
@@ -35,8 +34,8 @@ if DATABASE_URL:
     if DATABASE_URL.startswith('postgres://'):
         DATABASE_URL = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
     
-    # Asegurar que tenga sslmode=require para Neon
-    if 'postgresql://' in DATABASE_URL and 'sslmode=' not in DATABASE_URL:
+    # Asegurar que tenga sslmode=require
+    if 'sslmode' not in DATABASE_URL:
         if '?' in DATABASE_URL:
             DATABASE_URL += '&sslmode=require'
         else:
@@ -50,8 +49,6 @@ else:
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'clave-secreta-umb-2026-sistema-egresados')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-# Configuración optimizada para Vercel + PostgreSQL
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_recycle': 300,
     'pool_pre_ping': True,
@@ -79,7 +76,7 @@ class User(UserMixin, db.Model):
         return check_password_hash(self.password_hash, password)
 
 class Egresado(db.Model):
-    __tablename__ = 'egresado'
+    __tablename__ = 'egresados'
     id = db.Column(db.Integer, primary_key=True)
     matricula = db.Column(db.String(20), unique=True, nullable=False)
     nombre_completo = db.Column(db.String(200), nullable=False)
@@ -100,42 +97,34 @@ def load_user(user_id):
 # ========== INICIALIZACIÓN DE BASE DE DATOS ==========
 
 def init_database():
-    """Inicializar la base de datos con manejo de errores mejorado"""
+    """Inicializar la base de datos al arrancar la aplicación"""
     try:
         with app.app_context():
             print("🔧 Creando tablas en la base de datos...")
             db.create_all()
             
-            # Crear usuario coordinador por defecto si no existe
-            if not User.query.filter_by(username='coordinador').first():
-                coordinador = User(username='coordinador')
-                coordinador.set_password('coordinadorUMB2026')
-                db.session.add(coordinador)
-                db.session.commit()
-                print("✅ Usuario coordinador creado: coordinador / coordinadorUMB2026")
-            
             # Crear usuario admin por defecto si no existe
-            if not User.query.filter_by(username='admin').first():
+            admin_user = User.query.filter_by(username='admin').first()
+            if not admin_user:
                 admin = User(username='admin')
                 admin.set_password('admin123')
                 db.session.add(admin)
-                db.session.commit()
-                print("✅ Usuario admin creado: admin / admin123")
             
+            # Crear usuario coordinador por defecto si no existe
+            coordinador_user = User.query.filter_by(username='coordinador').first()
+            if not coordinador_user:
+                coordinador = User(username='coordinador')
+                coordinador.set_password('coordinadorUMB2026')
+                db.session.add(coordinador)
+            
+            db.session.commit()
             print("✅ Base de datos inicializada correctamente")
-            return True
             
     except Exception as e:
         print(f"❌ Error al inicializar base de datos: {str(e)}")
-        # Intentar rollback si hay error
-        try:
-            db.session.rollback()
-        except:
-            pass
-        return False
+        # No hacemos exit(1) para que la aplicación pueda continuar
 
-# Inicializar base de datos al importar
-print("🔄 Inicializando base de datos...")
+# Llamar a la inicialización al importar
 init_database()
 
 # ========== RUTAS PRINCIPALES ==========
@@ -155,17 +144,14 @@ def login():
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
         
-        try:
-            user = User.query.filter_by(username=username).first()
-            
-            if user and user.check_password(password):
-                login_user(user, remember=True)
-                flash(f'¡Bienvenido {user.username}!', 'success')
-                return redirect(url_for('dashboard'))
-            else:
-                flash('Usuario o contraseña incorrectos', 'danger')
-        except Exception as e:
-            flash(f'Error al iniciar sesión: {str(e)}', 'danger')
+        user = User.query.filter_by(username=username).first()
+        
+        if user and user.check_password(password):
+            login_user(user, remember=True)
+            flash(f'¡Bienvenido {user.username}!', 'success')
+            return redirect(url_for('dashboard'))
+        else:
+            flash('Usuario o contraseña incorrectos', 'danger')
     
     return render_template('login.html')
 
@@ -212,15 +198,12 @@ def formularios():
             telefono = request.form.get('telefono', '').strip()
             email = request.form.get('email', '').strip()
             
-            if not matricula or not nombre_completo or not carrera or not generacion or not estatus:
+            # Validar campos obligatorios
+            if not all([matricula, nombre_completo, carrera, generacion, estatus]):
                 flash('Todos los campos obligatorios deben ser completados', 'warning')
                 return redirect(url_for('formularios'))
             
-            # En PostgreSQL, validamos longitud pero más flexible
-            if len(matricula) < 8 or len(matricula) > 20:
-                flash('La matrícula debe tener entre 8 y 20 caracteres', 'warning')
-                return redirect(url_for('formularios'))
-            
+            # Validar matrícula única
             if Egresado.query.filter_by(matricula=matricula).first():
                 flash('La matrícula ya está registrada', 'danger')
                 return redirect(url_for('formularios'))
@@ -254,32 +237,28 @@ def formularios():
 @login_required
 def editar_egresado(id):
     """Editar información de un egresado existente"""
-    try:
-        egresado = Egresado.query.get_or_404(id)
-        
-        if request.method == 'POST':
-            try:
-                egresado.nombre_completo = request.form.get('nombre_completo', '').strip()
-                egresado.carrera = request.form.get('carrera', '').strip()
-                egresado.generacion = request.form.get('generacion', '').strip()
-                egresado.estatus = request.form.get('estatus', '').strip()
-                egresado.domicilio = request.form.get('domicilio', '').strip()
-                egresado.genero = request.form.get('genero', '').strip()
-                egresado.telefono = request.form.get('telefono', '').strip()
-                egresado.email = request.form.get('email', '').strip()
-                
-                db.session.commit()
-                flash(f'¡Información de {egresado.nombre_completo} actualizada exitosamente!', 'success')
-                return redirect(url_for('dashboard'))
-                
-            except Exception as e:
-                db.session.rollback()
-                flash(f'Error al actualizar información: {str(e)}', 'danger')
-        
-        return render_template('editar.html', egresado=egresado)
-    except Exception as e:
-        flash(f'Error al cargar datos para editar: {str(e)}', 'danger')
-        return redirect(url_for('dashboard'))
+    egresado = Egresado.query.get_or_404(id)
+    
+    if request.method == 'POST':
+        try:
+            egresado.nombre_completo = request.form.get('nombre_completo', '').strip()
+            egresado.carrera = request.form.get('carrera', '').strip()
+            egresado.generacion = request.form.get('generacion', '').strip()
+            egresado.estatus = request.form.get('estatus', '').strip()
+            egresado.domicilio = request.form.get('domicilio', '').strip()
+            egresado.genero = request.form.get('genero', '').strip()
+            egresado.telefono = request.form.get('telefono', '').strip()
+            egresado.email = request.form.get('email', '').strip()
+            
+            db.session.commit()
+            flash(f'¡Información de {egresado.nombre_completo} actualizada exitosamente!', 'success')
+            return redirect(url_for('dashboard'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error al actualizar información: {str(e)}', 'danger')
+    
+    return render_template('editar.html', egresado=egresado)
 
 @app.route('/eliminar/<int:id>', methods=['POST'])
 @login_required
@@ -308,7 +287,7 @@ def logout():
     flash('¡Sesión cerrada exitosamente!', 'info')
     return redirect(url_for('index'))
 
-# ========== API REST PARA CRUD ==========
+# ========== API REST PARA CRUD (AGREGADO) ==========
 
 @app.route('/api/egresados', methods=['GET'])
 @login_required
@@ -441,79 +420,57 @@ def api_delete_egresado(id):
             'error': str(e)
         }), 500
 
-# ========== RUTAS UTILITARIAS ==========
-
 @app.route('/init')
 def init_db():
-    """Inicializar base de datos (crear tablas y usuario admin)"""
+    """Inicializar base de datos (para Vercel)"""
     try:
-        db.create_all()
-        
-        # Crear usuario admin si no existe
-        if not User.query.filter_by(username='admin').first():
-            admin = User(username='admin')
-            admin.set_password('admin123')
-            db.session.add(admin)
-            db.session.commit()
-        
-        # Crear usuario coordinador si no existe
-        if not User.query.filter_by(username='coordinador').first():
-            coordinador = User(username='coordinador')
-            coordinador.set_password('coordinadorUMB2026')
-            db.session.add(coordinador)
+        with app.app_context():
+            db.create_all()
+            
+            # Crear usuarios por defecto si no existen
+            if not User.query.filter_by(username='admin').first():
+                admin = User(username='admin')
+                admin.set_password('admin123')
+                db.session.add(admin)
+                
+            if not User.query.filter_by(username='coordinador').first():
+                coordinador = User(username='coordinador')
+                coordinador.set_password('coordinadorUMB2026')
+                db.session.add(coordinador)
+            
             db.session.commit()
             
-        return '''
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>✅ Base de datos inicializada</title>
-            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-        </head>
-        <body class="bg-light">
-            <div class="container py-5">
-                <div class="card shadow">
-                    <div class="card-body text-center">
-                        <h1 class="text-success">✅ Base de datos inicializada</h1>
-                        <p class="lead">El sistema ha sido configurado correctamente en Neon PostgreSQL.</p>
-                        
-                        <div class="alert alert-info mt-4">
-                            <h5>Credenciales de acceso:</h5>
-                            <p><strong>Usuario:</strong> admin</p>
-                            <p><strong>Contraseña:</strong> admin123</p>
-                            <p><strong>Usuario:</strong> coordinador</p>
-                            <p><strong>Contraseña:</strong> coordinadorUMB2026</p>
-                            <p class="text-muted mt-2">Base de datos: Neon PostgreSQL (Vercel)</p>
-                        </div>
-                        
-                        <a href="/login" class="btn btn-primary btn-lg mt-3">Ir al Login</a>
+            return '''
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>✅ Base de datos inicializada</title>
+                <style>
+                    body { font-family: Arial, sans-serif; background: #f5f5f5; }
+                    .container { max-width: 600px; margin: 50px auto; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                    .success { color: #28a745; }
+                    .info { background: #d1ecf1; padding: 15px; border-radius: 5px; margin: 20px 0; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1 class="success">✅ Base de datos inicializada</h1>
+                    <p>El sistema ha sido configurado correctamente en Neon PostgreSQL.</p>
+                    
+                    <div class="info">
+                        <h3>Credenciales de acceso:</h3>
+                        <p><strong>Usuario:</strong> coordinador</p>
+                        <p><strong>Contraseña:</strong> coordinadorUMB2026</p>
+                        <p><strong>Usuario:</strong> admin</p>
+                        <p><strong>Contraseña:</strong> admin123</p>
+                        <p>Base de datos: Neon PostgreSQL (Vercel)</p>
                     </div>
+                    
+                    <a href="/login" style="display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px;">Ir al Login</a>
                 </div>
-            </div>
-        </body>
-        </html>
-        '''
-    else:
-        return '''
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>✅ Sistema listo</title>
-            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-        </head>
-        <body class="bg-light">
-            <div class="container py-5">
-                <div class="card shadow">
-                    <div class="card-body text-center">
-                        <h1 class="text-success">✅ Sistema listo</h1>
-                        <p class="lead">La base de datos ya está configurada en Neon PostgreSQL.</p>
-                        <a href="/login" class="btn btn-primary btn-lg mt-3">Ir al Login</a>
-                    </div>
-                </div>
-            </div>
-        </body>
-        </html>
-        '''
+            </body>
+            </html>
+            '''
                 
     except Exception as e:
         return f'''
@@ -521,18 +478,18 @@ def init_db():
         <html>
         <head>
             <title>❌ Error de inicialización</title>
-            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+            <style>
+                body {{ font-family: Arial, sans-serif; background: #f5f5f5; }}
+                .container {{ max-width: 600px; margin: 50px auto; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+                .error {{ color: #dc3545; }}
+            </style>
         </head>
-        <body class="bg-light">
-            <div class="container py-5">
-                <div class="card shadow">
-                    <div class="card-body text-center">
-                        <h1 class="text-danger">❌ Error de inicialización</h1>
-                        <p class="lead">Error: {str(e)}</p>
-                        <p>Verifica que la variable de entorno DATABASE_URL esté configurada correctamente.</p>
-                        <a href="/" class="btn btn-secondary mt-3">Volver al inicio</a>
-                    </div>
-                </div>
+        <body>
+            <div class="container">
+                <h1 class="error">❌ Error de inicialización</h1>
+                <p>Error: {str(e)}</p>
+                <p>Verifica que la variable de entorno DATABASE_URL esté configurada correctamente en Vercel.</p>
+                <a href="/" style="display: inline-block; padding: 10px 20px; background: #6c757d; color: white; text-decoration: none; border-radius: 5px;">Volver al inicio</a>
             </div>
         </body>
         </html>
@@ -547,27 +504,26 @@ def test_db():
         
         return jsonify({
             'status': 'success',
-            'message': '✅ Conexión exitosa a Neon PostgreSQL',
-            'database': 'Neon (PostgreSQL)',
+            'message': '✅ Conexión exitosa a la base de datos',
+            'database': 'Neon PostgreSQL' if 'neon' in DATABASE_URL else 'SQLite temporal',
             'stats': {
                 'egresados': count_egresados,
                 'usuarios': count_users
-            },
-            'tables': ['egresado', 'users']
+            }
         })
     except Exception as e:
         return jsonify({
             'status': 'error',
             'error': str(e),
-            'database_url': app.config['SQLALCHEMY_DATABASE_URI'][:50] + '...' if app.config['SQLALCHEMY_DATABASE_URI'] else 'No configurada'
+            'database_url': DATABASE_URL[:50] + '...' if DATABASE_URL else 'No configurada'
         }), 500
 
-# ========== EXPORTACIÓN DE DATOS ==========
+# ========== EXPORTACIÓN DE DATOS MEJORADA ==========
 
 @app.route('/exportar/<formato>')
 @login_required
 def exportar_egresados(formato):
-    """Exportar egresados a Excel, CSV o PDF"""
+    """Exportar egresados a Excel, CSV o PDF - VERSIÓN MEJORADA"""
     try:
         # Obtener todos los egresados
         egresados = Egresado.query.all()
@@ -749,6 +705,18 @@ def exportar_egresados(formato):
         flash(f'Error al exportar: {str(e)}', 'danger')
         return redirect('/dashboard')
 
+# ========== RUTA ADICIONAL PARA VER EGRESADO ==========
+
+@app.route('/egresado/<int:id>')
+def ver_egresado(id):
+    """Ver información detallada de un egresado"""
+    try:
+        egresado = Egresado.query.get_or_404(id)
+        return render_template('ver_egresado.html', egresado=egresado)
+    except Exception as e:
+        flash(f'Error al cargar información del egresado: {str(e)}', 'danger')
+        return redirect(url_for('dashboard'))
+
 # ========== MANEJO DE ERRORES ==========
 
 @app.errorhandler(404)
@@ -764,12 +732,6 @@ def no_autorizado(error):
     flash('Debes iniciar sesión para acceder a esta página', 'warning')
     return redirect(url_for('login'))
 
-@app.route('/egresado/<int:id>')
-def ver_egresado(id):
-    """Ver información detallada de un egresado"""
-    egresado = Egresado.query.get_or_404(id)
-    return render_template('ver_egresado.html', egresado=egresado)
-
 # ========== CONTEXT PROCESSOR ==========
 
 @app.context_processor
@@ -780,10 +742,8 @@ def inject_now():
 
 if __name__ == '__main__':
     print("=" * 60)
-    print("SISTEMA DE CONTROL DE EGRESADOS - UES SAN JOSÉ DEL RINCÓN")
-    print("=" * 60)
-    print("Modo: DESARROLLO")
-    print("Base de datos: Neon PostgreSQL (Vercel)")
+    print("SISTEMA DE CONTROL DE EGRESADOS - UMB")
+    print("Modo: DESARROLLO LOCAL")
     print("=" * 60)
     print("Instrucciones:")
     print("1. Visita http://localhost:5000/init para inicializar BD")
