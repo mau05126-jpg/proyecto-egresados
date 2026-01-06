@@ -713,9 +713,10 @@ def ver_egresado(id):
 def inject_now():
     return {'fecha_actual': datetime.now().strftime('%d/%m/%Y')}
 
-# ========== EJECUTAR APLICACIÓN ==========
+# ========== CONFIGURACIÓN PARA VERCEL ==========
 
-if __name__ == '__main__':
+# Vercel necesita "application" en lugar de "app" en serverless
+if __name__ == "__main__":
     print("=" * 60)
     print("SISTEMA DE CONTROL DE EGRESADOS - UES SAN JOSÉ DEL RINCÓN")
     print("=" * 60)
@@ -729,3 +730,6 @@ if __name__ == '__main__':
     print("=" * 60)
     
     app.run(debug=True, host='0.0.0.0', port=5000)
+
+# Vercel usa "application" en modo serverless
+application = app
